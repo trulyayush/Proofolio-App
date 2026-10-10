@@ -1,0 +1,34 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Direct aliases to centralized design system tokens
+val BackgroundCanvas = NexusTokens.Background
+val SurfacePrimary = NexusTokens.Surface
+val SurfaceSecondary = NexusTokens.SurfaceSecondary
+val TextForeground = NexusTokens.Foreground
+val TextForegroundSecondary = NexusTokens.ForegroundSecondary
+val TextForegroundTertiary = NexusTokens.ForegroundTertiary
+val BorderSubtle = NexusTokens.Border
+val BorderEmphasized = NexusTokens.BorderStrong
+val AccentPrimary = NexusTokens.Accent
+val AccentHovered = NexusTokens.AccentHover
+val AccentSubtleContainer = NexusTokens.AccentSubtle
+val OnAccentText = NexusTokens.OnAccent
+
+// Semantic Status Colors
+val SemanticSuccessText = NexusTokens.SuccessText
+val SemanticSuccessBg = NexusTokens.SuccessBackground
+val SemanticSuccessBorder = NexusTokens.SuccessBorder
+
+val SemanticWarningText = NexusTokens.WarningText
+val SemanticWarningBg = NexusTokens.WarningBackground
+val SemanticWarningBorder = NexusTokens.WarningBorder
+
+val SemanticErrorText = NexusTokens.ErrorText
+val SemanticErrorBg = NexusTokens.ErrorBackground
+val SemanticErrorBorder = NexusTokens.ErrorBorder
+
+val SemanticInfoText = NexusTokens.InfoText
+val SemanticInfoBg = NexusTokens.InfoBackground
+val SemanticInfoBorder = NexusTokens.InfoBorder
