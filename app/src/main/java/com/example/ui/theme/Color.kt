@@ -32,3 +32,13 @@ val SemanticErrorBorder = NexusTokens.ErrorBorder
 val SemanticInfoText = NexusTokens.InfoText
 val SemanticInfoBg = NexusTokens.InfoBackground
 val SemanticInfoBorder = NexusTokens.InfoBorder
+
+// Verified Levels Palette (PROJECT_RULES.md)
+val AccentEmerald = Color(0xFF047857)
+val AccentEmeraldLight = Color(0xFFD1FAE5)
+val AccentAmber = Color(0xFFB45309)
+val AccentAmberLight = Color(0xFFFEF3C7)
+val AccentRose = Color(0xFFBE123C)
+val AccentRoseLight = Color(0xFFFFE4E6)
+val TextTertiaryMuted = Color(0xFF71717A)
+val NeutralWarmSurfaceVariant = Color(0xFFEFEEE9)

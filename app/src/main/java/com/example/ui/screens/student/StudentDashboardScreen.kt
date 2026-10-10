@@ -3,10 +3,11 @@ package com.example.ui.screens.student
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,99 +18,163 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwitchAccount
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.ConnectionEntity
-import com.example.data.model.HackathonEntity
-import com.example.data.model.NotificationEntity
-import com.example.data.model.ProjectEntity
-import com.example.data.model.StudentEntity
-import com.example.ui.components.NexusBadge
+import com.example.data.SessionStore
+import com.example.data.api.ApiResult
+import com.example.data.api.ClaimedVsVerified
+import com.example.data.api.HackathonItem
+import com.example.data.api.MatchItem
+import com.example.data.api.OkResponse
+import com.example.data.api.ReportResponse
+import com.example.data.api.ReposResponse
+import com.example.data.api.VivaInProgress
+import com.example.ui.components.InteractiveRadarChart
 import com.example.ui.components.NexusButton
 import com.example.ui.components.NexusButtonVariant
 import com.example.ui.components.NexusCard
-import com.example.ui.components.NexusEmptyState
-import com.example.ui.components.NexusSegmentedTabs
-import com.example.ui.components.NexusSkillChip
-import com.example.ui.components.NexusTextField
 import com.example.ui.components.ScoreBadge
 import com.example.ui.components.StatusBadge
+import com.example.ui.theme.AccentAmber
+import com.example.ui.theme.AccentAmberLight
+import com.example.ui.theme.AccentEmerald
+import com.example.ui.theme.AccentEmeraldLight
+import com.example.ui.theme.AccentRose
+import com.example.ui.theme.AccentRoseLight
+import com.example.ui.theme.NeutralWarmSurfaceVariant
 import com.example.ui.theme.NexusTokens
+import com.example.ui.theme.TextTertiaryMuted
+import com.example.viewmodel.Load
+import kotlinx.coroutines.launch
 
-/**
- * Student Dashboard Screen:
- * Redesigned as a curated, high-impact technical engineering portfolio.
- * Features an architectural dossier masthead, technical stats grid,
- * elegant code repository cards, and structured achievement timelines.
- */
+// Helper for skill tag display names according to PROJECT_RULES.md
+fun formatSkillTag(tag: String): String = when (tag.lowercase()) {
+    "backend" -> "Backend"
+    "frontend" -> "Frontend"
+    "data" -> "Data"
+    "ai_ml" -> "AI/ML"
+    "devops" -> "DevOps"
+    "security" -> "Security"
+    else -> tag.replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
+
+@Composable
+fun VerifiedLevelBadge(
+    level: String,
+    modifier: Modifier = Modifier
+) {
+    // Exact colors and labels from PROJECT_RULES.md lines 40-44:
+    // strong = "Strong" (AccentEmerald on AccentEmeraldLight)
+    // partial = "Partial" (AccentAmber on AccentAmberLight)
+    // not_verified = "Not verified" (AccentRose on AccentRoseLight)
+    // not_shown = "Not shown" (TextTertiaryMuted on NeutralWarmSurfaceVariant)
+    val (label, textCol, bgCol) = when (level.lowercase()) {
+        "strong" -> Triple("Strong", AccentEmerald, AccentEmeraldLight)
+        "partial" -> Triple("Partial", AccentAmber, AccentAmberLight)
+        "not_verified" -> Triple("Not verified", AccentRose, AccentRoseLight)
+        "not_shown" -> Triple("Not shown", TextTertiaryMuted, NeutralWarmSurfaceVariant)
+        else -> Triple(level, TextTertiaryMuted, NeutralWarmSurfaceVariant)
+    }
+
+    Surface(
+        color = bgCol,
+        shape = RoundedCornerShape(NexusTokens.Radius.pill),
+        border = BorderStroke(1.dp, textCol.copy(alpha = 0.25f)),
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = textCol,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun StudentDashboardScreen(
-    student: StudentEntity,
-    projects: List<ProjectEntity>,
-    hackathons: List<HackathonEntity>,
-    connections: List<ConnectionEntity>,
-    allStudents: List<StudentEntity>,
-    notifications: List<NotificationEntity>,
-    onOpenProject: (String) -> Unit,
-    onEditProfile: () -> Unit,
-    onSubmitNewProject: (title: String, repoUrl: String, onComplete: (Result<ProjectEntity>) -> Unit) -> Unit,
-    onAcceptConnection: (String) -> Unit,
-    onSendConnection: (String) -> Unit,
-    onSwitchRole: () -> Unit,
-    onLogout: () -> Unit = onSwitchRole
+    reportState: Load<ReportResponse>,
+    sessionStore: SessionStore,
+    applyingIds: Set<String>,
+    reposState: Load<ReposResponse> = Load.Idle,
+    onLoadRepos: () -> Unit = {},
+    resumeVivaError: String? = null,
+    onClearResumeVivaError: () -> Unit = {},
+    onRefresh: () -> Unit,
+    onVerifyRepo: () -> Unit,
+    onVerifyHackathonRepo: (String) -> Unit = {},
+    onContinueViva: (sessionId: String) -> Unit,
+    onViewReport: () -> Unit,
+    onApply: (String) -> Unit,
+    onAddHackathon: suspend (
+        event: String,
+        year: Int,
+        result: String,
+        teamSize: Int,
+        repoFullName: String
+    ) -> ApiResult<HackathonItem> = { _, _, _, _, _ -> ApiResult.Err("NOT_IMPL", "", null) },
+    onDeleteHackathon: suspend (hackathonId: String) -> ApiResult<OkResponse> = { ApiResult.Err("NOT_IMPL", "", null) },
+    onSignOut: () -> Unit
 ) {
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var showAddProjectDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(sessionStore.studentId) {
+        if (reportState is Load.Idle) {
+            onRefresh()
+        }
+    }
 
-    val tabs = listOf(
-        "Projects (${projects.size})",
-        "Portfolio",
-        "Network (${connections.size})",
-        "Updates (${notifications.size})"
-    )
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    var showAddHackathonSheet by remember { mutableStateOf(false) }
+    var hackathonPendingRemoval by remember { mutableStateOf<HackathonItem?>(null) }
+    var isRemovingHackathon by remember { mutableStateOf(false) }
+    var removeErrorMessage by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -119,409 +184,724 @@ fun StudentDashboardScreen(
             .navigationBarsPadding()
             .testTag("student_dashboard_screen")
     ) {
-        // 1. Curated Technical Portfolio Masthead
+        // --- Top Bar & Masthead ---
         Surface(
             color = NexusTokens.Surface,
             border = BorderStroke(1.dp, NexusTokens.Border)
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Identification Row
+                // Student Identity
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(NexusTokens.Radius.md),
+                        color = NexusTokens.SurfaceSecondary,
+                        border = BorderStroke(1.dp, NexusTokens.Border),
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        // Architectural Monogram Box with Verified Status
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            Surface(
-                                shape = RoundedCornerShape(NexusTokens.Radius.md),
-                                color = NexusTokens.SurfaceSecondary,
-                                border = BorderStroke(1.5.dp, NexusTokens.BorderStrong),
-                                modifier = Modifier.size(52.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = student.fullName.take(1).uppercase(),
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = NexusTokens.Foreground
-                                    )
-                                }
-                            }
-                            if (student.isEmailVerified) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = NexusTokens.Accent,
-                                    border = BorderStroke(1.5.dp, NexusTokens.Surface),
-                                    modifier = Modifier.size(16.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Default.Verified,
-                                            contentDescription = "Verified Identity",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(10.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = student.fullName,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                                    fontWeight = FontWeight.Bold,
-                                    color = NexusTokens.Foreground
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = NexusTokens.AccentSubtle,
-                                    shape = RoundedCornerShape(NexusTokens.Radius.pill),
-                                    border = BorderStroke(1.dp, NexusTokens.Accent.copy(alpha = 0.2f))
-                                ) {
-                                    Text(
-                                        text = "NX-PORTFOLIO",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = NexusTokens.Accent,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
+                        Box(contentAlignment = Alignment.Center) {
+                            val initials = (sessionStore.studentName ?: "Student")
+                                .split(" ")
+                                .mapNotNull { it.firstOrNull()?.toString() }
+                                .take(2)
+                                .joinToString("")
+                                .uppercase()
                             Text(
-                                text = "${student.college} • ${student.branch}",
+                                text = initials.ifEmpty { "VB" },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = NexusTokens.Accent
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = sessionStore.studentName ?: "Student",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NexusTokens.Foreground
+                        )
+                        val ghName = sessionStore.githubUsername
+                        if (ghName != null) {
+                            Text(
+                                text = "@$ghName",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NexusTokens.ForegroundSecondary
                             )
-
-                            Text(
-                                text = "Year ${student.academicYear} • CGPA ${student.cgpa} / 10.0",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = NexusTokens.Foreground
-                            )
-                        }
-                    }
-
-                    // Header Action Buttons
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Surface(
-                            shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                            color = NexusTokens.SurfaceSecondary,
-                            border = BorderStroke(1.dp, NexusTokens.Border)
-                        ) {
-                            IconButton(
-                                onClick = onEditProfile,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .testTag("edit_profile_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = "Edit Profile",
-                                    tint = NexusTokens.ForegroundSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                            color = NexusTokens.SurfaceSecondary,
-                            border = BorderStroke(1.dp, NexusTokens.Border)
-                        ) {
-                            IconButton(
-                                onClick = onLogout,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .testTag("logout_student_button")
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ExitToApp,
-                                    contentDescription = "Log Out",
-                                    tint = NexusTokens.Foreground,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                            color = NexusTokens.SurfaceSecondary,
-                            border = BorderStroke(1.dp, NexusTokens.Border)
-                        ) {
-                            IconButton(
-                                onClick = onSwitchRole,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .testTag("switch_role_button")
-                            ) {
-                                Icon(
-                                    Icons.Default.SwitchAccount,
-                                    contentDescription = "Switch Portal",
-                                    tint = NexusTokens.Foreground,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
                         }
                     }
                 }
 
-                if (student.bio.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        color = NexusTokens.SurfaceSecondary.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                        border = BorderStroke(1.dp, NexusTokens.Border)
+                // Action controls
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.testTag("dashboard_refresh_button")
                     ) {
-                        Text(
-                            text = "“${student.bio}”",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                lineHeight = 17.sp
-                            ),
-                            color = NexusTokens.ForegroundSecondary,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh report",
+                            tint = NexusTokens.ForegroundSecondary
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    NexusButton(
+                        onClick = onSignOut,
+                        variant = NexusButtonVariant.Outline,
+                        icon = Icons.AutoMirrored.Filled.ExitToApp,
+                        testTag = "dashboard_sign_out_button"
+                    ) {
+                        Text("Sign out")
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 2. Architectural Metrics Bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PortfolioMetricPill(
-                        label = "REPOSITORIES",
-                        value = "${projects.size}",
-                        modifier = Modifier.weight(1f)
-                    )
-                    PortfolioMetricPill(
-                        label = "ASSESSMENTS",
-                        value = "${projects.count { it.status == "COMPLETED" }}",
-                        modifier = Modifier.weight(1f)
-                    )
-                    PortfolioMetricPill(
-                        label = "HACKATHONS",
-                        value = "${hackathons.size}",
-                        modifier = Modifier.weight(1f)
-                    )
-                    PortfolioMetricPill(
-                        label = "NETWORK",
-                        value = "${connections.count { it.status == "ACCEPTED" }}",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 3. Segmented Navigation Tabs
-                NexusSegmentedTabs(
-                    tabs = tabs,
-                    selectedIndex = selectedTabIndex,
-                    onSelectTab = { selectedTabIndex = it }
-                )
             }
         }
 
-        // Tab Content
-        Box(modifier = Modifier.weight(1f)) {
-            when (selectedTabIndex) {
-                0 -> {
-                    ProjectsTabContent(
-                        projects = projects,
-                        onOpenProject = onOpenProject,
-                        onAddProjectClick = { showAddProjectDialog = true }
-                    )
+        // --- Content Area ---
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+        ) {
+            when (reportState) {
+                is Load.Loading, is Load.Idle -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                color = NexusTokens.Accent,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Loading your report…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NexusTokens.ForegroundSecondary
+                            )
+                        }
+                    }
                 }
-                1 -> {
-                    PortfolioTabContent(student = student, hackathons = hackathons)
+
+                is Load.Failed -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        NexusCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = 500.dp),
+                            backgroundColor = NexusTokens.Surface,
+                            borderColor = NexusTokens.Border
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = NexusTokens.ErrorText,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = reportState.error.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = NexusTokens.Foreground,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(18.dp))
+                                NexusButton(
+                                    onClick = onRefresh,
+                                    variant = NexusButtonVariant.Primary,
+                                    testTag = "dashboard_retry_button"
+                                ) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    }
                 }
-                2 -> {
-                    ConnectionsTabContent(
-                        currentStudentId = student.id,
-                        connections = connections,
-                        allStudents = allStudents,
-                        onAccept = onAcceptConnection,
-                        onSend = onSendConnection
-                    )
-                }
-                3 -> {
-                    NotificationsTabContent(notifications = notifications)
+
+                is Load.Ready -> {
+                    val report = reportState.value
+                    val isDone = report.status == "done"
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = 840.dp)
+                        ) {
+                            if (resumeVivaError != null) {
+                                Surface(
+                                    color = NexusTokens.ErrorBackground,
+                                    shape = RoundedCornerShape(NexusTokens.Radius.sm),
+                                    border = BorderStroke(1.dp, NexusTokens.ErrorBorder),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ErrorOutline,
+                                                contentDescription = null,
+                                                tint = NexusTokens.ErrorText,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = resumeVivaError,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = NexusTokens.ErrorText
+                                            )
+                                        }
+                                        IconButton(onClick = onClearResumeVivaError, modifier = Modifier.size(24.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss",
+                                                tint = NexusTokens.ErrorText,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!isDone) {
+                                // Card B: Finish your viva (when vivaInProgress != null)
+                                if (report.vivaInProgress != null) {
+                                    CardBFinishViva(
+                                        vivaInProgress = report.vivaInProgress,
+                                        onContinue = { onContinueViva(report.vivaInProgress.sessionId) },
+                                        smaller = false
+                                    )
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                } else if (report.repo == null) {
+                                    // Card A: Verify repository (only when report.repo == null and vivaInProgress == null)
+                                    CardAVerifyRepo(
+                                        onPickRepo = onVerifyRepo
+                                    )
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                } else {
+                                    CardAVerifyRepo(
+                                        onPickRepo = onVerifyRepo
+                                    )
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
+
+                                // Claimed Skills
+                                if (report.claimedVsVerified.isNotEmpty()) {
+                                    Text(
+                                        text = "Claimed skills",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NexusTokens.Foreground
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "These will be verified once you answer questions about your repository code.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        report.claimedVsVerified.forEach { item ->
+                                            Surface(
+                                                color = NexusTokens.Surface,
+                                                shape = RoundedCornerShape(NexusTokens.Radius.md),
+                                                border = BorderStroke(1.dp, NexusTokens.Border)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = item.name,
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = NexusTokens.Foreground
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    VerifiedLevelBadge(level = item.level)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
+                            } else {
+                                // --- State: Viva Completed (status == "done") ---
+
+                                // 1. Overall Score Banner
+                                NexusCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    backgroundColor = NexusTokens.Surface,
+                                    borderColor = NexusTokens.Border
+                                ) {
+                                    Column(modifier = Modifier.padding(20.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Surface(
+                                                        color = NexusTokens.SuccessBackground,
+                                                        shape = RoundedCornerShape(NexusTokens.Radius.pill),
+                                                        border = BorderStroke(1.dp, NexusTokens.SuccessBorder)
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(6.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(NexusTokens.SuccessText)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text(
+                                                                text = "Verification Complete",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = NexusTokens.SuccessText
+                                                            )
+                                                        }
+                                                    }
+
+                                                    if (report.repo != null) {
+                                                        Spacer(modifier = Modifier.width(10.dp))
+                                                        Text(
+                                                            text = report.repo.fullName,
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = NexusTokens.ForegroundSecondary
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(10.dp))
+
+                                                Text(
+                                                    text = "Technical Assessment Report",
+                                                    style = MaterialTheme.typography.headlineSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = NexusTokens.Foreground
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Verified score based on repository analysis, build history, and code viva answers.",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = NexusTokens.ForegroundSecondary
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.width(16.dp))
+
+                                            ScoreBadge(score = report.overall)
+                                        }
+
+                                        Spacer(modifier = Modifier.height(20.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            NexusButton(
+                                                onClick = onVerifyRepo,
+                                                variant = NexusButtonVariant.Secondary,
+                                                icon = Icons.Default.Code,
+                                                testTag = "dashboard_verify_another_button"
+                                            ) {
+                                                Text("Verify another repository")
+                                            }
+
+                                            NexusButton(
+                                                onClick = onViewReport,
+                                                variant = NexusButtonVariant.Outline,
+                                                icon = Icons.Default.Description,
+                                                testTag = "dashboard_view_report_button"
+                                            ) {
+                                                Text("View full report")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (report.vivaInProgress != null) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    CardBFinishViva(
+                                        vivaInProgress = report.vivaInProgress,
+                                        onContinue = { onContinueViva(report.vivaInProgress.sessionId) },
+                                        smaller = true
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                // 2. Interactive Radar Chart
+                                if (report.skills.isNotEmpty()) {
+                                    Text(
+                                        text = "Verified Skill Dimensions",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NexusTokens.Foreground
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Evaluated across your repository commits and code viva responses.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    InteractiveRadarChart(skills = report.skills)
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
+
+                                // 3. Claimed vs Verified Skills
+                                if (report.claimedVsVerified.isNotEmpty()) {
+                                    Text(
+                                        text = "Claimed vs Verified Skills",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NexusTokens.Foreground
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Verification breakdown for each engineering capability.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        report.claimedVsVerified.forEach { item ->
+                                            Surface(
+                                                color = NexusTokens.Surface,
+                                                shape = RoundedCornerShape(NexusTokens.Radius.md),
+                                                border = BorderStroke(1.dp, NexusTokens.Border),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column {
+                                                        Text(
+                                                            text = item.name,
+                                                            style = MaterialTheme.typography.titleSmall,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = NexusTokens.Foreground
+                                                        )
+                                                        Text(
+                                                            text = formatSkillTag(item.tag),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = NexusTokens.ForegroundTertiary
+                                                        )
+                                                    }
+
+                                                    VerifiedLevelBadge(level = item.level)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
+
+                                // 4. Build History (Neutral facts as per rule 15)
+                                if (report.buildHistory != null) {
+                                    val bh = report.buildHistory
+                                    Text(
+                                        text = "Build History",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NexusTokens.Foreground
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Repository commit cadence and contribution telemetry.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        BuildHistoryMetricCard(
+                                            title = "Commits",
+                                            value = "${bh.commits}",
+                                            subtitle = "authored",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BuildHistoryMetricCard(
+                                            title = "Active Days",
+                                            value = "${bh.activeDays}",
+                                            subtitle = "${bh.spanDays}d span",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BuildHistoryMetricCard(
+                                            title = "Author Share",
+                                            value = "${(bh.yourCommitShare * 100).toInt()}%",
+                                            subtitle = "${bh.authors} authors",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        BuildHistoryMetricCard(
+                                            title = "Median Lines",
+                                            value = "${bh.medianLinesPerCommit}",
+                                            subtitle = "per commit",
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                }
+                            }
+
+                            // Your Hackathons section (built from report.hackathons)
+                            YourHackathonsSection(
+                                hackathons = report.hackathons,
+                                onAddHackathon = { showAddHackathonSheet = true },
+                                onVerifyHackathon = onVerifyHackathonRepo,
+                                onRemoveHackathon = { item ->
+                                    hackathonPendingRemoval = item
+                                    removeErrorMessage = null
+                                }
+                            )
+
+                            // 5. Matched Internships (Always shown if listings match)
+                            if (report.matches.isNotEmpty()) {
+                                Text(
+                                    text = "Matched Internships",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NexusTokens.Foreground
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Ventures looking for students with your verified skill profile.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.ForegroundSecondary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    report.matches.forEach { match ->
+                                        InternshipMatchCard(
+                                            match = match,
+                                            isApplying = applyingIds.contains(match.listingId),
+                                            onApply = { onApply(match.listingId) }
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Add Project Modal Dialog
-    if (showAddProjectDialog) {
-        AddProjectDialog(
-            onDismiss = { showAddProjectDialog = false },
-            onSubmit = { title, repoUrl, onResult ->
-                onSubmitNewProject(title, repoUrl) { result ->
-                    onResult(result)
-                    if (result.isSuccess) {
-                        showAddProjectDialog = false
+    if (showAddHackathonSheet) {
+        AddHackathonSheet(
+            reposState = reposState,
+            onLoadRepos = onLoadRepos,
+            onSaveHackathon = onAddHackathon,
+            onDismiss = { showAddHackathonSheet = false }
+        )
+    }
+
+    if (hackathonPendingRemoval != null) {
+        val item = hackathonPendingRemoval!!
+        AlertDialog(
+            onDismissRequest = {
+                if (!isRemovingHackathon) {
+                    hackathonPendingRemoval = null
+                    removeErrorMessage = null
+                }
+            },
+            title = {
+                Text(
+                    text = "Remove hackathon",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = NexusTokens.Foreground
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Remove ${item.event} ${item.year} from your profile?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NexusTokens.Foreground
+                    )
+                    if (removeErrorMessage != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = removeErrorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ErrorText
+                        )
                     }
                 }
-            }
+            },
+            confirmButton = {
+                NexusButton(
+                    onClick = {
+                        isRemovingHackathon = true
+                        removeErrorMessage = null
+                        scope.launch {
+                            val res = onDeleteHackathon(item.hackathonId)
+                            isRemovingHackathon = false
+                            when (res) {
+                                is ApiResult.Ok -> {
+                                    hackathonPendingRemoval = null
+                                }
+                                is ApiResult.Err -> {
+                                    removeErrorMessage = res.message
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isRemovingHackathon,
+                    variant = NexusButtonVariant.Primary,
+                    testTag = "confirm_remove_hackathon_button"
+                ) {
+                    if (isRemovingHackathon) {
+                        CircularProgressIndicator(
+                            color = NexusTokens.OnAccent,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Removing…")
+                    } else {
+                        Text("Remove")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        hackathonPendingRemoval = null
+                        removeErrorMessage = null
+                    },
+                    enabled = !isRemovingHackathon
+                ) {
+                    Text("Cancel", color = NexusTokens.ForegroundSecondary)
+                }
+            },
+            containerColor = NexusTokens.Surface
         )
     }
 }
 
 @Composable
-private fun PortfolioMetricPill(
-    label: String,
+private fun BuildHistoryMetricCard(
+    title: String,
     value: String,
+    subtitle: String,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = NexusTokens.SurfaceSecondary,
-        shape = RoundedCornerShape(NexusTokens.Radius.sm),
+        color = NexusTokens.Surface,
+        shape = RoundedCornerShape(NexusTokens.Radius.md),
         border = BorderStroke(1.dp, NexusTokens.Border),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = NexusTokens.ForegroundTertiary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
                 color = NexusTokens.Foreground
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = label,
+                text = subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.5.sp,
-                color = NexusTokens.ForegroundTertiary
+                color = NexusTokens.ForegroundSecondary
             )
         }
     }
 }
 
 @Composable
-private fun ProjectsTabContent(
-    projects: List<ProjectEntity>,
-    onOpenProject: (String) -> Unit,
-    onAddProjectClick: () -> Unit
+private fun InternshipMatchCard(
+    match: MatchItem,
+    isApplying: Boolean,
+    onApply: () -> Unit
 ) {
-    if (projects.isEmpty()) {
-        NexusEmptyState(
-            title = "No Engineering Projects Submitted",
-            description = "Submit a public GitHub repository to initiate architectural code parsing, project-specific AI interview sessions, and verified radar evaluations.",
-            icon = Icons.Default.Code,
-            actionButtonText = "Submit First Project",
-            onActionClick = onAddProjectClick
-        )
-    } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Auditable Submissions Notice
-            item {
-                Surface(
-                    color = NexusTokens.SurfaceSecondary,
-                    shape = RoundedCornerShape(NexusTokens.Radius.md),
-                    border = BorderStroke(1.dp, NexusTokens.Border)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = NexusTokens.ForegroundSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "IMMUTABLE AUDIT LOG: Submitted repositories and AI evaluation dossiers are permanently recorded to guarantee credibility for recruiters.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NexusTokens.ForegroundSecondary,
-                            lineHeight = 15.sp,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-
-            // Projects List with Redesigned Technical Cards
-            items(projects, key = { it.id }) { proj ->
-                ArchitecturalProjectCard(
-                    project = proj,
-                    onClick = { onOpenProject(proj.id) }
-                )
-            }
-
-            // Add Project Action
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                NexusButton(
-                    onClick = onAddProjectClick,
-                    variant = NexusButtonVariant.Outline,
-                    icon = Icons.Default.Add,
-                    modifier = Modifier.fillMaxWidth(),
-                    testTag = "add_project_button_list"
-                ) {
-                    Text("Submit Another Repository")
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArchitecturalProjectCard(
-    project: ProjectEntity,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("project_card_${project.id}")
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(NexusTokens.Radius.lg),
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = NexusTokens.Surface),
-        border = BorderStroke(1.dp, NexusTokens.Border),
-        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 0.dp)
+    NexusCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = NexusTokens.Surface,
+        borderColor = NexusTokens.Border
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp)
-        ) {
-            // Top Row: Title + Status Badge
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -529,326 +909,171 @@ private fun ArchitecturalProjectCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = project.title,
+                        text = match.venture,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = NexusTokens.Accent
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = match.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = NexusTokens.Foreground
                     )
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    // Monospace Repo Link Tag
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Terminal,
-                            contentDescription = null,
-                            tint = NexusTokens.Accent,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = project.githubRepoUrl.removePrefix("https://"),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = NexusTokens.Accent,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
 
-                StatusBadge(status = project.status)
+                Spacer(modifier = Modifier.width(12.dp))
+
+                ScoreBadge(score = match.match, label = "Match")
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Repo Description
             Text(
-                text = project.repoDescription,
+                text = match.why,
                 style = MaterialTheme.typography.bodySmall,
                 color = NexusTokens.ForegroundSecondary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
                 lineHeight = 18.sp
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Tech Stack & Action Footer
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Languages Tags
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    project.languages.split(",").take(3).forEach { lang ->
-                        Surface(
-                            color = NexusTokens.SurfaceSecondary,
-                            shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                            border = BorderStroke(1.dp, NexusTokens.Border)
-                        ) {
-                            Text(
-                                text = lang.trim(),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = NexusTokens.ForegroundSecondary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Interactive Link Indicator
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = when (project.status) {
-                            "COMPLETED" -> "View Dossier"
-                            "READY_FOR_INTERVIEW" -> "Begin Assessment"
-                            else -> "Inspect Details"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = NexusTokens.Accent
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = NexusTokens.Accent,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PortfolioTabContent(
-    student: StudentEntity,
-    hackathons: List<HackathonEntity>
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // 1. Technical Competencies Matrix
-        item {
-            NexusCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Technical Competencies Matrix",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = NexusTokens.Foreground
-                    )
+                if (match.applied) {
                     Surface(
                         color = NexusTokens.SuccessBackground,
                         shape = RoundedCornerShape(NexusTokens.Radius.pill),
                         border = BorderStroke(1.dp, NexusTokens.SuccessBorder)
                     ) {
-                        Text(
-                            text = "Code-Extracted",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            color = NexusTokens.SuccessText,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = NexusTokens.SuccessText,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Applied",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = NexusTokens.SuccessText
+                            )
+                        }
+                    }
+                } else {
+                    NexusButton(
+                        onClick = onApply,
+                        enabled = !isApplying,
+                        variant = NexusButtonVariant.Primary,
+                        icon = Icons.Default.Work,
+                        testTag = "dashboard_apply_button_${match.listingId}"
+                    ) {
+                        if (isApplying) {
+                            CircularProgressIndicator(
+                                color = NexusTokens.OnAccent,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Applying…")
+                        } else {
+                            Text("Apply to role")
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    student.technicalSkills.split(",").take(6).forEach {
-                        NexusSkillChip(skill = it.trim())
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "TARGET DOMAINS",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    letterSpacing = 0.8.sp,
-                    color = NexusTokens.ForegroundTertiary
-                )
-                Text(
-                    text = student.preferredDomains,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NexusTokens.Foreground
-                )
             }
         }
+    }
+}
 
-        // 2. Academic Credentials Dossier
-        item {
-            NexusCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.School,
-                        contentDescription = null,
-                        tint = NexusTokens.Accent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+@Composable
+private fun CardBFinishViva(
+    vivaInProgress: VivaInProgress,
+    onContinue: () -> Unit,
+    smaller: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val repoName = vivaInProgress.repoFullName?.substringAfterLast("/") ?: "Repository"
+    val subtitleText = "$repoName · ${vivaInProgress.answered} of ${vivaInProgress.total} answered"
+
+    if (smaller) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            color = NexusTokens.Surface,
+            shape = RoundedCornerShape(NexusTokens.Radius.md),
+            border = BorderStroke(1.dp, NexusTokens.Border)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Academic Dossier & Institution",
+                        text = "Finish your viva",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = NexusTokens.Foreground
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitleText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NexusTokens.ForegroundSecondary
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                NexusButton(
+                    onClick = onContinue,
+                    variant = NexusButtonVariant.Secondary,
+                    testTag = "dashboard_finish_viva_button"
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Institution",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NexusTokens.ForegroundTertiary
-                        )
-                        Text(
-                            text = student.college,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = NexusTokens.Foreground
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "Cumulative GPA",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = NexusTokens.ForegroundTertiary
-                        )
-                        Text(
-                            text = "${student.cgpa} / 10.0",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = NexusTokens.Accent
-                        )
-                    }
+                    Text("Continue")
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
+            }
+        }
+    } else {
+        NexusCard(
+            modifier = modifier.fillMaxWidth(),
+            backgroundColor = NexusTokens.Surface,
+            borderColor = NexusTokens.Border
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "Department: ${student.branch} • Graduating Class Year ${student.academicYear}",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Finish your viva",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = NexusTokens.Foreground
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = subtitleText,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = NexusTokens.ForegroundSecondary
                 )
-            }
-        }
 
-        // 3. Hackathon Citations & Competitive Coding
-        item {
-            NexusCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(modifier = Modifier.height(18.dp))
+
+                NexusButton(
+                    onClick = onContinue,
+                    variant = NexusButtonVariant.Primary,
+                    icon = Icons.Default.PlayArrow,
+                    testTag = "dashboard_finish_viva_button"
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            tint = NexusTokens.WarningText,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Hackathons & Competitive Honors",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = NexusTokens.Foreground
-                        )
-                    }
-
-                    Text(
-                        text = "${hackathons.size} Citations",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NexusTokens.ForegroundTertiary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (hackathons.isEmpty()) {
-                    Text(
-                        text = "No hackathon citations registered.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NexusTokens.ForegroundTertiary
-                    )
-                } else {
-                    hackathons.forEach { hack ->
-                        Surface(
-                            color = NexusTokens.SurfaceSecondary,
-                            shape = RoundedCornerShape(NexusTokens.Radius.md),
-                            border = BorderStroke(1.dp, NexusTokens.Border),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = hack.eventName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = NexusTokens.Foreground
-                                    )
-                                    Surface(
-                                        color = NexusTokens.WarningBackground,
-                                        shape = RoundedCornerShape(NexusTokens.Radius.pill),
-                                        border = BorderStroke(1.dp, NexusTokens.WarningBorder)
-                                    ) {
-                                        Text(
-                                            text = hack.rankOrPerformance,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 10.sp,
-                                            color = NexusTokens.WarningText,
-                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Text(
-                                    text = "Citation: ${hack.certificateTitle} (Year ${hack.year})",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = NexusTokens.ForegroundSecondary
-                                )
-                            }
-                        }
-                    }
+                    Text("Continue")
                 }
             }
         }
@@ -856,217 +1081,292 @@ private fun PortfolioTabContent(
 }
 
 @Composable
-private fun ConnectionsTabContent(
-    currentStudentId: String,
-    connections: List<ConnectionEntity>,
-    allStudents: List<StudentEntity>,
-    onAccept: (String) -> Unit,
-    onSend: (String) -> Unit
+private fun CardAVerifyRepo(
+    onPickRepo: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+    NexusCard(
+        modifier = modifier.fillMaxWidth(),
+        backgroundColor = NexusTokens.Surface,
+        borderColor = NexusTokens.Border
     ) {
-        // Privacy Safeguard Header
-        item {
-            Surface(
-                color = NexusTokens.SurfaceSecondary,
-                shape = RoundedCornerShape(NexusTokens.Radius.md),
-                border = BorderStroke(1.dp, NexusTokens.Border)
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Verify your repository",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = NexusTokens.Foreground
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "VerifiedBuild inspects your public GitHub code, generates 5 focused questions about what you built, and scores your answers to verify your engineering skills.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NexusTokens.ForegroundSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                StatusBadge(status = "PENDING")
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            NexusButton(
+                onClick = onPickRepo,
+                variant = NexusButtonVariant.Primary,
+                icon = Icons.Default.PlayArrow,
+                modifier = Modifier.testTag("dashboard_verify_repo_button")
+            ) {
+                Text("Pick a repository to verify")
+            }
+        }
+    }
+}
+
+@Composable
+private fun YourHackathonsSection(
+    hackathons: List<HackathonItem>,
+    onAddHackathon: () -> Unit,
+    onVerifyHackathon: (String) -> Unit,
+    onRemoveHackathon: (HackathonItem) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Your hackathons",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = NexusTokens.Foreground
+            )
+
+            if (hackathons.isNotEmpty()) {
+                NexusButton(
+                    onClick = onAddHackathon,
+                    variant = NexusButtonVariant.Outline,
+                    icon = Icons.Default.Add,
+                    testTag = "add_hackathon_button"
+                ) {
+                    Text("Add hackathon")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (hackathons.isEmpty()) {
+            Surface(
+                color = NexusTokens.Surface,
+                shape = RoundedCornerShape(NexusTokens.Radius.md),
+                border = BorderStroke(1.dp, NexusTokens.Border),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        Icons.Default.Lock,
+                        imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
-                        tint = NexusTokens.ForegroundSecondary,
-                        modifier = Modifier.size(15.dp)
+                        tint = NexusTokens.ForegroundTertiary,
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "ZERO-LEAK PRIVACY: Engineering peers can exchange project links, but NEVER access private raw AI assessment transcripts or recruiter notes.",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Add the hackathons you've done. Each one counts toward your matches once you verify it with a viva on its repo.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = NexusTokens.ForegroundSecondary,
-                        lineHeight = 15.sp,
-                        fontSize = 11.sp
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    NexusButton(
+                        onClick = onAddHackathon,
+                        variant = NexusButtonVariant.Primary,
+                        icon = Icons.Default.Add,
+                        testTag = "empty_add_hackathon_button"
+                    ) {
+                        Text("Add a hackathon")
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                hackathons.forEach { item ->
+                    DashboardHackathonCard(
+                        hackathon = item,
+                        onVerifyNow = { onVerifyHackathon(item.repoFullName) },
+                        onRemove = { onRemoveHackathon(item) }
                     )
                 }
             }
         }
 
-        // Active / Pending Connections
-        item {
-            Text(
-                text = "Mutual Connections & Inbound Requests",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = NexusTokens.Foreground
-            )
-        }
-
-        if (connections.isEmpty()) {
-            item {
-                Text(
-                    text = "No active connection requests yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NexusTokens.ForegroundTertiary
-                )
-            }
-        } else {
-            items(connections) { conn ->
-                val otherId = if (conn.requesterStudentId == currentStudentId) conn.targetStudentId else conn.requesterStudentId
-                val otherStudent = allStudents.find { it.id == otherId }
-
-                NexusCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = otherStudent?.fullName ?: "Candidate Peer",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = NexusTokens.Foreground
-                            )
-                            Text(
-                                text = "${otherStudent?.college ?: "University"} • ${otherStudent?.branch ?: ""}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NexusTokens.ForegroundSecondary
-                            )
-                        }
-
-                        if (conn.status == "PENDING" && conn.targetStudentId == currentStudentId) {
-                            NexusButton(
-                                onClick = { onAccept(conn.id) },
-                                variant = NexusButtonVariant.Primary
-                            ) {
-                                Text("Accept")
-                            }
-                        } else {
-                            StatusBadge(status = conn.status)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Discover Peers
-        item {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Discover Engineering Peers",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = NexusTokens.Foreground
-            )
-        }
-
-        val peers = allStudents.filter { it.id != currentStudentId && connections.none { c -> c.requesterStudentId == it.id || c.targetStudentId == it.id } }
-        if (peers.isEmpty()) {
-            item {
-                Text(
-                    text = "All campus peers connected.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NexusTokens.ForegroundTertiary
-                )
-            }
-        } else {
-            items(peers) { peer ->
-                NexusCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = peer.fullName,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = NexusTokens.Foreground
-                            )
-                            Text(
-                                text = "${peer.college} • ${peer.branch} • CGPA ${peer.cgpa}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NexusTokens.ForegroundSecondary
-                            )
-                        }
-
-                        NexusButton(
-                            onClick = { onSend(peer.id) },
-                            variant = NexusButtonVariant.Outline,
-                            icon = Icons.Default.PersonAdd
-                        ) {
-                            Text("Connect")
-                        }
-                    }
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun NotificationsTabContent(notifications: List<NotificationEntity>) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun DashboardHackathonCard(
+    hackathon: HackathonItem,
+    onVerifyNow: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val resultTitle = hackathon.result.replaceFirstChar { it.uppercase() }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Surface(
+        color = NexusTokens.SurfaceSecondary,
+        shape = RoundedCornerShape(NexusTokens.Radius.md),
+        border = BorderStroke(1.dp, NexusTokens.Border),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        if (notifications.isEmpty()) {
-            item {
-                NexusEmptyState(
-                    title = "All Caught Up",
-                    description = "No pending updates. Autonomous evaluation notices and interview schedule notifications will appear here.",
-                    icon = Icons.Default.Notifications
-                )
-            }
-        } else {
-            items(notifications) { notif ->
-                NexusCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "$resultTitle · ${hackathon.event} ${hackathon.year}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = NexusTokens.Foreground
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${hackathon.repoFullName} · team of ${hackathon.teamSize}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NexusTokens.ForegroundSecondary
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (hackathon.verified) {
                         Surface(
-                            color = NexusTokens.AccentSubtle,
-                            shape = CircleShape,
-                            modifier = Modifier.size(32.dp)
+                            color = AccentEmeraldLight,
+                            shape = RoundedCornerShape(NexusTokens.Radius.pill),
+                            border = BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.3f))
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
-                                    Icons.Default.Notifications,
+                                    imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,
-                                    tint = NexusTokens.Accent,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = AccentEmerald,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Verified",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentEmerald
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                    } else {
+                        Surface(
+                            color = NeutralWarmSurfaceVariant,
+                            shape = RoundedCornerShape(NexusTokens.Radius.pill),
+                            border = BorderStroke(1.dp, TextTertiaryMuted.copy(alpha = 0.25f))
+                        ) {
                             Text(
-                                text = notif.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = NexusTokens.Foreground
-                            )
-                            Text(
-                                text = notif.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NexusTokens.ForegroundSecondary,
-                                modifier = Modifier.padding(top = 2.dp),
-                                lineHeight = 18.sp
+                                text = "Not verified yet",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextTertiaryMuted,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier
+                                .size(28.dp)
+                                .testTag("hackathon_overflow_${hackathon.hackathonId}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = NexusTokens.ForegroundSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.background(NexusTokens.Surface)
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Remove",
+                                        color = NexusTokens.ErrorText
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRemove()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = NexusTokens.ErrorText,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (hackathon.verified) {
+                val scorePart = "Viva ${hackathon.vivaScore ?: "—"}/100"
+                val commitSharePart = if (hackathon.yourCommitShare != null) {
+                    " · ${(hackathon.yourCommitShare * 100).toInt()}% of commits by you"
+                } else ""
+
+                Text(
+                    text = "$scorePart$commitSharePart",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = AccentEmerald
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    NexusButton(
+                        onClick = onVerifyNow,
+                        variant = NexusButtonVariant.Secondary,
+                        testTag = "verify_hackathon_button_${hackathon.hackathonId}"
+                    ) {
+                        Text("Verify now")
                     }
                 }
             }
@@ -1074,131 +1374,3 @@ private fun NotificationsTabContent(notifications: List<NotificationEntity>) {
     }
 }
 
-@Composable
-private fun AddProjectDialog(
-    onDismiss: () -> Unit,
-    onSubmit: (title: String, repoUrl: String, onResult: (Result<ProjectEntity>) -> Unit) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var repoUrl by remember { mutableStateOf("https://github.com/") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = { if (!isLoading) onDismiss() },
-        containerColor = NexusTokens.Surface,
-        title = {
-            Text(
-                text = "Submit Repository Project",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = NexusTokens.Foreground
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = "Submit an accessible public GitHub repository for automated codebase extraction and repository-specific AI technical interview generation.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NexusTokens.ForegroundSecondary,
-                    modifier = Modifier.padding(bottom = 14.dp)
-                )
-
-                NexusTextField(
-                    value = title,
-                    onValueChange = {
-                        title = it
-                        errorMessage = null
-                    },
-                    label = "Project Title",
-                    placeholder = "e.g. Distributed Consensus Engine",
-                    testTag = "new_project_title_input"
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                NexusTextField(
-                    value = repoUrl,
-                    onValueChange = {
-                        repoUrl = it
-                        errorMessage = null
-                    },
-                    label = "GitHub Repository URL",
-                    placeholder = "https://github.com/username/repository",
-                    testTag = "new_project_url_input"
-                )
-
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        color = NexusTokens.ErrorBackground,
-                        shape = RoundedCornerShape(NexusTokens.Radius.md),
-                        border = BorderStroke(1.dp, NexusTokens.ErrorBorder)
-                    ) {
-                        Text(
-                            text = errorMessage ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NexusTokens.ErrorText,
-                            modifier = Modifier.padding(10.dp)
-                        )
-                    }
-                }
-
-                if (isLoading) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = NexusTokens.Accent
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            "Auditing repository via GitHub API...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NexusTokens.ForegroundSecondary
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            NexusButton(
-                onClick = {
-                    if (title.isBlank() || repoUrl.isBlank()) {
-                        errorMessage = "Please enter both project title and GitHub URL."
-                        return@NexusButton
-                    }
-                    isLoading = true
-                    errorMessage = null
-                    onSubmit(title, repoUrl) { result ->
-                        isLoading = false
-                        result.onFailure {
-                            errorMessage = it.message ?: "Failed to validate repository."
-                        }
-                    }
-                },
-                enabled = !isLoading,
-                isLoading = isLoading,
-                variant = NexusButtonVariant.Primary,
-                testTag = "submit_project_confirm_button"
-            ) {
-                Text("Analyze & Submit")
-            }
-        },
-        dismissButton = {
-            if (!isLoading) {
-                NexusButton(
-                    onClick = onDismiss,
-                    variant = NexusButtonVariant.Outline
-                ) {
-                    Text("Cancel")
-                }
-            }
-        }
-    )
-}

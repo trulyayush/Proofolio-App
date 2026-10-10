@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,8 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,7 +42,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.AssessmentReportEntity
 import com.example.ui.theme.NexusTokens
 import kotlin.math.cos
 import kotlin.math.sin
@@ -55,31 +51,20 @@ data class RadarDimension(
     val title: String,
     val score: Int,
     val description: String,
-    val recommendation: String
+    val recommendation: String = ""
 )
 
 @Composable
 fun InteractiveRadarChart(
-    report: AssessmentReportEntity,
+    dimensions: List<RadarDimension>,
     modifier: Modifier = Modifier
 ) {
-    val dimensions = remember(report) {
-        listOf(
-            RadarDimension("Technical Understanding", report.technicalUnderstandingScore, "Grasp of foundational CS concepts, framework lifecycles, and core paradigms.", "Deepen understanding of operating system primitives and memory models."),
-            RadarDimension("Implementation Knowledge", report.implementationKnowledgeScore, "Hands-on fluency with language idioms, APIs, and clean code conventions.", "Refactor repeated patterns into reusable utility modules and domain extensions."),
-            RadarDimension("Problem Solving", report.problemSolvingScore, "Analytical breakdown of engineering constraints and trade-off decisions.", "Practice documenting edge-case trade-offs in structured Architecture Decision Records (ADRs)."),
-            RadarDimension("Architecture & Org", report.architectureScore, "Module boundary separation, dependency management, and scalability patterns.", "Ensure clean unidirectional data flow and isolate presentation from domain logic."),
-            RadarDimension("Algorithms & Data", report.algorithmsScore, "Efficiency of data structures, complexity analysis, and algorithmic tuning.", "Benchmark lookup and indexing operations under large dataset scenarios."),
-            RadarDimension("Debugging & Edge Cases", report.debuggingEdgeCasesScore, "Resilience against race conditions, nullability, and runtime exceptions.", "Add automated fuzzing and stress testing for concurrent async workflows."),
-            RadarDimension("Project Explanation", report.explanationAbilityScore, "Ability to articulate system design, trade-offs, and rationale clearly.", "Focus on communicating the 'why' behind architectural choices rather than just the 'what'."),
-            RadarDimension("Communication Clarity", report.communicationClarityScore, "Technical precision, structured answers, and professional dialogue.", "Summarize complex solutions with a high-level thesis followed by technical depth.")
-        )
-    }
+    if (dimensions.isEmpty()) return
 
     var selectedIndex by remember { mutableStateOf<Int?>(0) }
     val progress = remember { Animatable(0f) }
 
-    LaunchedEffect(report.id) {
+    LaunchedEffect(dimensions) {
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,
@@ -103,7 +88,7 @@ fun InteractiveRadarChart(
             Canvas(
                 modifier = Modifier
                     .size(270.dp)
-                    .pointerInput(report.id) {
+                    .pointerInput(dimensions) {
                         detectTapGestures { tapOffset ->
                             val center = Offset(size.width / 2f, size.height / 2f)
                             val radius = minOf(size.width, size.height) / 2f * 0.78f
@@ -146,80 +131,103 @@ fun InteractiveRadarChart(
         )
 
         // Selected Dimension Inspection Card
-        val selected = selectedIndex?.let { dimensions.getOrNull(it) } ?: dimensions.first()
-        NexusCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = NexusTokens.Surface,
-            borderColor = NexusTokens.Border
-        ) {
-            Row(
+        val selected = selectedIndex?.let { dimensions.getOrNull(it) } ?: dimensions.firstOrNull()
+        if (selected != null) {
+            NexusCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                backgroundColor = NexusTokens.Surface,
+                borderColor = NexusTokens.Border
             ) {
-                Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = selected.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = NexusTokens.Foreground
+                        )
+                        Text(
+                            text = "Verified Skill Dimension",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NexusTokens.ForegroundSecondary
+                        )
+                    }
+
+                    ScoreBadge(score = selected.score)
+                }
+
+                if (selected.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
                     Text(
-                        text = selected.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = NexusTokens.Foreground
-                    )
-                    Text(
-                        text = "Assessment Dimension",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NexusTokens.ForegroundSecondary
+                        text = selected.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NexusTokens.ForegroundSecondary,
+                        lineHeight = 20.sp
                     )
                 }
 
-                ScoreBadge(score = selected.score)
-            }
-
-            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
-
-            Text(
-                text = selected.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = NexusTokens.ForegroundSecondary,
-                lineHeight = 20.sp
-            )
-
-            Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
-
-            // Targeted Suggestion Box
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = NexusTokens.SurfaceSecondary,
-                shape = RoundedCornerShape(NexusTokens.Radius.sm),
-                border = BorderStroke(1.dp, NexusTokens.Border)
-            ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Targeted Recommendation",
-                        tint = NexusTokens.Accent,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(NexusTokens.Spacing.xs))
-                    Column {
-                        Text(
-                            text = "Targeted Growth Recommendation",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = NexusTokens.Accent
-                        )
-                        Text(
-                            text = selected.recommendation,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NexusTokens.ForegroundSecondary
-                        )
+                // If recommendation is blank, don't draw it
+                if (selected.recommendation.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = NexusTokens.SurfaceSecondary,
+                        shape = RoundedCornerShape(NexusTokens.Radius.sm),
+                        border = BorderStroke(1.dp, NexusTokens.Border)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Targeted Recommendation",
+                                tint = NexusTokens.Accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(NexusTokens.Spacing.xs))
+                            Column {
+                                Text(
+                                    text = "Targeted Growth Recommendation",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NexusTokens.Accent
+                                )
+                                Text(
+                                    text = selected.recommendation,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.ForegroundSecondary
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+// Overload for map of skills for convenience
+@Composable
+fun InteractiveRadarChart(
+    skills: Map<String, Int>,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = remember(skills) {
+        listOf(
+            RadarDimension("Backend", skills["backend"] ?: 0, if (skills.containsKey("backend")) "Score ${skills["backend"]}/100" else "Not shown"),
+            RadarDimension("Frontend", skills["frontend"] ?: 0, if (skills.containsKey("frontend")) "Score ${skills["frontend"]}/100" else "Not shown"),
+            RadarDimension("Data", skills["data"] ?: 0, if (skills.containsKey("data")) "Score ${skills["data"]}/100" else "Not shown"),
+            RadarDimension("AI/ML", skills["ai_ml"] ?: 0, if (skills.containsKey("ai_ml")) "Score ${skills["ai_ml"]}/100" else "Not shown"),
+            RadarDimension("DevOps", skills["devops"] ?: 0, if (skills.containsKey("devops")) "Score ${skills["devops"]}/100" else "Not shown"),
+            RadarDimension("Security", skills["security"] ?: 0, if (skills.containsKey("security")) "Score ${skills["security"]}/100" else "Not shown")
+        )
+    }
+    InteractiveRadarChart(dimensions = dimensions, modifier = modifier)
 }
 
 private fun DrawScope.drawSpiderWebRadar(
@@ -233,6 +241,7 @@ private fun DrawScope.drawSpiderWebRadar(
     val center = Offset(size.width / 2f, size.height / 2f)
     val maxRadius = size.minDimension / 2f * 0.72f
     val count = dimensions.size
+    if (count == 0) return
     val angleStep = (2.0 * Math.PI) / count
 
     // Concentric Guide Polygons
@@ -269,7 +278,7 @@ private fun DrawScope.drawSpiderWebRadar(
 
     for (i in 0 until count) {
         val angle = -Math.PI / 2.0 + i * angleStep
-        val scoreFraction = (dimensions[i].score / 100f).coerceIn(0.1f, 1f) * progress
+        val scoreFraction = (dimensions[i].score / 100f).coerceIn(0.05f, 1f) * progress
         val r = maxRadius * scoreFraction
         val px = (center.x + r * cos(angle)).toFloat()
         val py = (center.y + r * sin(angle)).toFloat()

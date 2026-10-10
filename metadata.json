@@ -1,6 +1,6 @@
 {
-  "name": "NexusIntern",
-  "description": "AI-Powered Internship Matching Platform with student technical portfolios, repository assessments, AI technical interviews, and admin/recruiter command centers.",
+  "name": "VerifiedBuild",
+  "description": "Student app of VerifiedBuild for repository technical assessments, verified skills, and matched internships.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
