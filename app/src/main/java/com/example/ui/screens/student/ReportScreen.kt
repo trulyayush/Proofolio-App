@@ -181,7 +181,7 @@ fun ReportScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Applying shares your VerifiedBuild report (scores, answers, code evidence and hackathons) with ${match.venture} for this role. Nobody else sees it.",
+                        text = "Applying shares your Proofolio report (scores, answers, code evidence and hackathons) with ${match.venture} for this role. Nobody else sees it.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = NexusTokens.ForegroundSecondary,
                         lineHeight = 20.sp
@@ -297,7 +297,7 @@ fun ReportScreen(
                 .padding(innerPadding)
         ) {
             NexusHeader(
-                title = "VerifiedBuild Report",
+                title = "Proofolio Report",
                 subtitle = "Engineering skill evaluation",
                 onBack = onBack
             )

@@ -3,8 +3,10 @@ package com.example.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.NexusTokens
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Inbox
 
 @Composable
 fun StatusBadge(
@@ -110,6 +114,66 @@ fun ScoreBadge(
                 style = MaterialTheme.typography.labelSmall,
                 color = fg.copy(alpha = 0.8f)
             )
+        }
+    }
+}
+
+@Composable
+fun NexusEmptyState(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = androidx.compose.material.icons.Icons.Default.Inbox,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = NexusTokens.Surface,
+        shape = RoundedCornerShape(NexusTokens.Radius.lg),
+        border = BorderStroke(1.dp, NexusTokens.Border)
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = NexusTokens.SurfaceSecondary,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = NexusTokens.ForegroundSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = NexusTokens.Foreground,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = NexusTokens.ForegroundSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.padding(vertical = 4.dp))
+                NexusButton(
+                    onClick = onAction,
+                    variant = NexusButtonVariant.Secondary
+                ) {
+                    Text(actionLabel)
+                }
+            }
         }
     }
 }

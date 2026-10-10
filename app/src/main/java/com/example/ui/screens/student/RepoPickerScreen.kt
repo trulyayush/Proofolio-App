@@ -51,6 +51,7 @@ import com.example.data.api.VivaInProgress
 import com.example.ui.components.NexusButton
 import com.example.ui.components.NexusButtonVariant
 import com.example.ui.components.NexusCard
+import com.example.ui.components.NexusEmptyState
 import com.example.ui.components.NexusTextField
 import com.example.ui.theme.NexusTokens
 import com.example.viewmodel.Load
@@ -238,47 +239,26 @@ fun RepoPickerScreen(
                                 .padding(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            NexusCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .widthIn(max = 500.dp),
-                                backgroundColor = NexusTokens.Surface,
-                                borderColor = NexusTokens.Border
+                            Column(
+                                modifier = Modifier.fillMaxWidth().widthIn(max = 500.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                NexusEmptyState(
+                                    title = "No Repositories Found",
+                                    description = "No public repos found on @${githubUsername ?: "you"}. Push a project to GitHub, then tap Refresh.",
+                                    icon = Icons.Default.Code,
+                                    actionLabel = "Refresh",
+                                    onAction = onLoadRepos
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                TextButton(
+                                    onClick = { showTeamRepoDialog = true },
+                                    modifier = Modifier.testTag("repo_picker_team_repo_button")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Code,
-                                        contentDescription = null,
-                                        tint = NexusTokens.ForegroundTertiary,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = "No public repos found on @${githubUsername ?: "you"}. Push a project to GitHub, then tap Refresh.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = NexusTokens.ForegroundSecondary,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        text = "Verify a team repo instead",
+                                        color = NexusTokens.Accent
                                     )
-                                    Spacer(modifier = Modifier.height(18.dp))
-                                    NexusButton(
-                                        onClick = onLoadRepos,
-                                        variant = NexusButtonVariant.Secondary
-                                    ) {
-                                        Text("Refresh")
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    TextButton(
-                                        onClick = { showTeamRepoDialog = true },
-                                        modifier = Modifier.testTag("repo_picker_team_repo_button")
-                                    ) {
-                                        Text(
-                                            text = "Verify a team repo instead",
-                                            color = NexusTokens.Accent
-                                        )
-                                    }
                                 }
                             }
                         }

@@ -20,6 +20,7 @@ data class VivaUiState(
     val currentQuestionId: String? = null, // null when the viva is finished
     val followUp: String? = null,          // non-null: the student is answering this follow-up for the current question
     val answeredIds: List<String> = emptyList(),
+    val skippedIds: List<String> = emptyList(),
     val lastTranscript: String? = null,    // what the API recorded for the last answer; show it as "We heard: ..."
     val loading: Boolean = false,
     val error: ApiResult.Err? = null,
@@ -111,6 +112,24 @@ class VivaController {
 
     fun clearTranscript() {
         _state.value = _state.value.copy(lastTranscript = null)
+    }
+
+    fun skipQuestion() {
+        val s = _state.value
+        val currentId = s.currentQuestionId ?: return
+        
+        val currentIndex = s.questions.indexOfFirst { it.id == currentId }
+        val nextQuestionId = if (currentIndex + 1 < s.questions.size) s.questions[currentIndex + 1].id else null
+        
+        _state.value = s.copy(
+            skippedIds = (s.skippedIds + currentId).distinct(),
+            currentQuestionId = nextQuestionId,
+            done = nextQuestionId == null
+        )
+    }
+
+    fun skipInterview() {
+        _state.value = _state.value.copy(done = true)
     }
 
     private suspend fun send(request: AnswerRequest) {

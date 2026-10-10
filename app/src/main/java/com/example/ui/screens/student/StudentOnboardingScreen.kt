@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,7 +126,9 @@ fun StudentOnboardingScreen(
     onSuccess: () -> Unit,
     onBack: () -> Unit,
     onClearError: () -> Unit,
-    sessionStore: SessionStore
+    sessionStore: SessionStore,
+    onPrivacyPolicyClick: () -> Unit,
+    onTermsClick: () -> Unit
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -150,6 +153,8 @@ fun StudentOnboardingScreen(
     var githubError by remember { mutableStateOf<String?>(null) }
     var interestsError by remember { mutableStateOf<String?>(null) }
     var skillsError by remember { mutableStateOf<String?>(null) }
+    var termsAccepted by rememberSaveable { mutableStateOf(false) }
+    var termsError by remember { mutableStateOf<String?>(null) }
 
     val isSubmitting = state is Load.Loading
     val apiError = (state as? Load.Failed)?.error
@@ -246,6 +251,13 @@ fun StudentOnboardingScreen(
         }
         if (!validate()) return
 
+        if (!termsAccepted) {
+            termsError = "You must agree to the Terms & Conditions and Privacy Policy to register."
+            return
+        } else {
+            termsError = null
+        }
+
         onClearError()
         val normalizedGh = normalizeGitHubUsername(githubInput)
         val resumeToUse = if (withoutResume) null else pickedResume
@@ -308,7 +320,7 @@ fun StudentOnboardingScreen(
                     border = BorderStroke(1.dp, NexusTokens.Border)
                 ) {
                     Text(
-                        text = "VerifiedBuild Profile",
+                        text = "Proofolio Profile",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = NexusTokens.ForegroundSecondary,
@@ -698,6 +710,76 @@ fun StudentOnboardingScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = skillsError!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ErrorText
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Terms & Conditions checkbox and links
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { termsAccepted = !termsAccepted }
+                            .testTag("onboarding_terms_checkbox_row"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = {
+                                termsAccepted = it
+                                if (it) termsError = null
+                            },
+                            modifier = Modifier.testTag("onboarding_terms_checkbox")
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "I agree to the ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.ForegroundSecondary
+                                )
+                                Text(
+                                    text = "Terms & Conditions",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = NexusTokens.Accent,
+                                    modifier = Modifier
+                                        .clickable(onClick = onTermsClick)
+                                        .testTag("onboarding_terms_link")
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "and acknowledge the ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.ForegroundSecondary
+                                )
+                                Text(
+                                    text = "Privacy Policy",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = NexusTokens.Accent,
+                                    modifier = Modifier
+                                        .clickable(onClick = onPrivacyPolicyClick)
+                                        .testTag("onboarding_privacy_link")
+                                )
+                            }
+                        }
+                    }
+
+                    if (termsError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = termsError!!,
                             style = MaterialTheme.typography.bodySmall,
                             color = NexusTokens.ErrorText
                         )

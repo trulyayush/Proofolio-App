@@ -4,31 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Center geometric hexagon shield -->
+    <!-- Stylized P -->
     <path
-        android:fillColor="#10B981"
-        android:pathData="M54,28 L74,39.5 L74,68.5 L54,80 L34,68.5 L34,39.5 Z" />
+        android:fillColor="#1E293B"
+        android:pathData="M36,28h24c12,0 22,10 22,22s-10,22 -22,22h-16v24h-8zM44,36v20h16c7,0 14,-4 14,-10s-7,-10 -14,-10z" />
+    <!-- Arrow accent -->
     <path
-        android:fillColor="#047857"
-        android:pathData="M54,28 L74,39.5 L74,68.5 L54,80 Z" />
-    <!-- Inner Core & Code / AI Spark -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,38 L64,48 L54,58 L44,48 Z" />
-    <path
-        android:fillColor="#E2E8F0"
-        android:pathData="M49,60 L59,60 L62,64 L54,72 L46,64 Z" />
-    <!-- Node connections -->
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M54,22 A4,4 0 1,1 54,22.01" />
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M80,54 A4,4 0 1,1 80,54.01" />
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M28,54 A4,4 0 1,1 28,54.01" />
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M54,86 A4,4 0 1,1 54,86.01" />
+        android:fillColor="#C5A059"
+        android:pathData="M52,48l16,-16h-6v-6h16v16h-6v-6l-16,16z" />
 </vector>

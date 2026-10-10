@@ -1,6 +1,6 @@
 {
-  "name": "VerifiedBuild",
-  "description": "Student app of VerifiedBuild for repository technical assessments, verified skills, and matched internships.",
+  "name": "Proofolio",
+  "description": "Student app of Proofolio for repository technical assessments, verified skills, and matched internships.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

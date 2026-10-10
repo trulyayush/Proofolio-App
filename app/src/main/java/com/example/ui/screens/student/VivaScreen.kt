@@ -78,6 +78,7 @@ import com.example.data.api.AnalyzeResponse
 import com.example.ui.components.NexusButton
 import com.example.ui.components.NexusButtonVariant
 import com.example.ui.components.NexusCard
+import com.example.ui.components.InterviewProgressBar
 import com.example.ui.theme.AccentAmber
 import com.example.ui.theme.AccentAmberLight
 import com.example.ui.theme.AccentEmerald
@@ -320,7 +321,7 @@ fun VivaScreen(
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = if (state.followUp != null) "Follow-up question" else "VerifiedBuild technical viva",
+                            text = if (state.followUp != null) "Follow-up question" else "Proofolio technical viva",
                             style = MaterialTheme.typography.labelSmall,
                             color = NexusTokens.ForegroundSecondary
                         )
@@ -361,17 +362,11 @@ fun VivaScreen(
                     }
                 }
 
-                val progress = if (state.questions.isNotEmpty()) {
-                    (state.answeredIds.size.toFloat() / state.questions.size.toFloat()).coerceIn(0f, 1f)
-                } else 0f
-
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp),
-                    color = NexusTokens.Accent,
-                    trackColor = NexusTokens.Border
+                InterviewProgressBar(
+                    totalQuestions = state.questions.size,
+                    answeredIds = state.answeredIds,
+                    skippedIds = state.skippedIds,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }
@@ -1014,6 +1009,30 @@ fun VivaScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                // Skip Area
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    NexusButton(
+                        onClick = { vivaController.skipQuestion() },
+                        variant = NexusButtonVariant.Secondary,
+                        modifier = Modifier.weight(1f),
+                        testTag = "skip_question_button"
+                    ) {
+                        Text("Skip Question")
+                    }
+                    NexusButton(
+                        onClick = { vivaController.skipInterview() },
+                        variant = NexusButtonVariant.Secondary,
+                        modifier = Modifier.weight(1f),
+                        testTag = "skip_interview_button"
+                    ) {
+                        Text("Skip Interview")
                     }
                 }
             }

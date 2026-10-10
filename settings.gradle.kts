@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "NexusIntern"
+rootProject.name = "Proofolio"
 
 include(":app")

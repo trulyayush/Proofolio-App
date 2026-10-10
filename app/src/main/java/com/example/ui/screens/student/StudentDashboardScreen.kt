@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -46,6 +47,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -77,6 +79,7 @@ import com.example.ui.components.InteractiveRadarChart
 import com.example.ui.components.NexusButton
 import com.example.ui.components.NexusButtonVariant
 import com.example.ui.components.NexusCard
+import com.example.ui.components.NexusEmptyState
 import com.example.ui.components.ScoreBadge
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.AccentAmber
@@ -89,6 +92,13 @@ import com.example.ui.theme.NeutralWarmSurfaceVariant
 import com.example.ui.theme.NexusTokens
 import com.example.ui.theme.TextTertiaryMuted
 import com.example.viewmodel.Load
+import com.example.viewmodel.AppViewModel
+import com.example.data.*
+import androidx.compose.material3.Switch
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import kotlinx.coroutines.launch
 
 // Helper for skill tag display names according to PROJECT_RULES.md
@@ -143,6 +153,20 @@ fun StudentDashboardScreen(
     sessionStore: SessionStore,
     applyingIds: Set<String>,
     reposState: Load<ReposResponse> = Load.Idle,
+    isDemo: Boolean = false,
+    demoView: AppViewModel.DemoView = AppViewModel.DemoView.STUDENT,
+    onSetDemoView: (AppViewModel.DemoView) -> Unit = {},
+    demoState: DemoState? = null,
+    onNavigateDemo: (DemoScreen, Int) -> Unit = { _, _ -> },
+    onNextDemoStep: () -> Unit = {},
+    onPrevDemoStep: () -> Unit = {},
+    onSelectStudent: (String) -> Unit = {},
+    onSelectProject: (String) -> Unit = {},
+    onAnswerQuestion: (String, String) -> Unit = { _, _ -> },
+    onSkipQuestion: (String) -> Unit = {},
+    onToggleShortlist: (String) -> Unit = {},
+    onShareFeedback: (String, Boolean) -> Unit = { _, _ -> },
+    onUpdateFilters: (Map<String, List<String>>) -> Unit = {},
     onLoadRepos: () -> Unit = {},
     resumeVivaError: String? = null,
     onClearResumeVivaError: () -> Unit = {},
@@ -160,7 +184,10 @@ fun StudentDashboardScreen(
         repoFullName: String
     ) -> ApiResult<HackathonItem> = { _, _, _, _, _ -> ApiResult.Err("NOT_IMPL", "", null) },
     onDeleteHackathon: suspend (hackathonId: String) -> ApiResult<OkResponse> = { ApiResult.Err("NOT_IMPL", "", null) },
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    onSettingsClick: () -> Unit = {},
+    onExitDemo: () -> Unit = {},
+    onResetDemo: () -> Unit = {}
 ) {
     LaunchedEffect(sessionStore.studentId) {
         if (reportState is Load.Idle) {
@@ -184,7 +211,157 @@ fun StudentDashboardScreen(
             .navigationBarsPadding()
             .testTag("student_dashboard_screen")
     ) {
-        // --- Top Bar & Masthead ---
+        // --- Persistent Judges Demo Mode Banner & View Switcher ---
+        if (isDemo) {
+            Surface(
+                color = Color(0xFFFFFBEB),
+                border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFD97706))
+                            )
+                            Text(
+                                text = "DEMO MODE ACTIVE",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF92400E)
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = onResetDemo,
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text(
+                                    text = "Reset",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFB45309)
+                                )
+                            }
+                            TextButton(
+                                onClick = onExitDemo,
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("exit_demo_banner_button")
+                            ) {
+                                Text(
+                                    text = "Exit Demo",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFF92400E)
+                                )
+                            }
+                        }
+                    }
+
+                    // View Switcher Tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DemoTabButton(
+                            title = "Student View",
+                            selected = demoView == AppViewModel.DemoView.STUDENT,
+                            onClick = { onSetDemoView(AppViewModel.DemoView.STUDENT) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DemoTabButton(
+                            title = "Admin Dashboard",
+                            selected = demoView == AppViewModel.DemoView.ADMIN,
+                            onClick = { onSetDemoView(AppViewModel.DemoView.ADMIN) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        DemoTabButton(
+                            title = "Recruiter Portal",
+                            selected = demoView == AppViewModel.DemoView.RECRUITER,
+                            onClick = { onSetDemoView(AppViewModel.DemoView.RECRUITER) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Switch based on demoView if in demo mode, otherwise show student dashboard
+        if (isDemo && demoView == AppViewModel.DemoView.ADMIN) {
+            AdminDashboardDemoView(demoState = demoState, onToggleShortlist = onToggleShortlist)
+        } else if (isDemo && demoView == AppViewModel.DemoView.RECRUITER) {
+            RecruiterDashboardDemoView(demoState = demoState)
+        } else if (isDemo) {
+            val state = demoState ?: DemoFixtures.createInitialState(DemoMode.GUIDED)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Journey Stepper Header
+                DemoJourneyHeader(
+                    currentScreen = state.currentScreen,
+                    currentStep = state.currentStep,
+                    onNavigate = onNavigateDemo,
+                    onPrev = onPrevDemoStep,
+                    onNext = onNextDemoStep
+                )
+
+                // Isolation & Simulated Data Banner
+                Surface(
+                    color = Color(0xFFF4F3F0),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE7E5E0))
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF059669),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Demo Mode: Data is simulated, isolated, and will not affect production records.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF3F3F46)
+                        )
+                    }
+                }
+
+                // Render current screen of the 7-step journey
+                when (state.currentScreen) {
+                    DemoScreen.STUDENT_PROFILE -> DemoStudentProfileView(state, onSelectStudent)
+                    DemoScreen.REPOSITORY -> DemoRepositoryView(state, onSelectProject)
+                    DemoScreen.INTERVIEW -> DemoInterviewView(state, onAnswerQuestion, onSkipQuestion)
+                    DemoScreen.ASSESSMENT -> DemoAssessmentReportView(state)
+                    DemoScreen.ADMIN_DASHBOARD -> AdminDashboardDemoView(demoState = demoState, onToggleShortlist = onToggleShortlist)
+                    DemoScreen.FEEDBACK -> DemoFeedbackView(state, onShareFeedback)
+                    DemoScreen.RECRUITER_DASHBOARD -> RecruiterDashboardDemoView(demoState = demoState)
+                    else -> DemoStudentProfileView(state, onSelectStudent)
+                }
+            }
+        } else {
         Surface(
             color = NexusTokens.Surface,
             border = BorderStroke(1.dp, NexusTokens.Border)
@@ -245,6 +422,19 @@ fun StudentDashboardScreen(
 
                 // Action controls
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier.testTag("dashboard_settings_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = NexusTokens.ForegroundSecondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     IconButton(
                         onClick = onRefresh,
                         modifier = Modifier.testTag("dashboard_refresh_button")
@@ -848,6 +1038,7 @@ fun StudentDashboardScreen(
             },
             containerColor = NexusTokens.Surface
         )
+      }
     }
 }
 
@@ -1105,7 +1296,7 @@ private fun CardAVerifyRepo(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "VerifiedBuild inspects your public GitHub code, generates 5 focused questions about what you built, and scores your answers to verify your engineering skills.",
+                        text = "Proofolio inspects your public GitHub code, generates 5 focused questions about what you built, and scores your answers to verify your engineering skills.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = NexusTokens.ForegroundSecondary
                     )
@@ -1165,40 +1356,14 @@ private fun YourHackathonsSection(
         Spacer(modifier = Modifier.height(10.dp))
 
         if (hackathons.isEmpty()) {
-            Surface(
-                color = NexusTokens.Surface,
-                shape = RoundedCornerShape(NexusTokens.Radius.md),
-                border = BorderStroke(1.dp, NexusTokens.Border),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.EmojiEvents,
-                        contentDescription = null,
-                        tint = NexusTokens.ForegroundTertiary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Add the hackathons you've done. Each one counts toward your matches once you verify it with a viva on its repo.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NexusTokens.ForegroundSecondary,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    NexusButton(
-                        onClick = onAddHackathon,
-                        variant = NexusButtonVariant.Primary,
-                        icon = Icons.Default.Add,
-                        testTag = "empty_add_hackathon_button"
-                    ) {
-                        Text("Add a hackathon")
-                    }
-                }
-            }
+            NexusEmptyState(
+                title = "No Hackathons Added",
+                description = "Add the hackathons you've done. Each one counts toward your matches once you verify it with a viva on its repo.",
+                icon = Icons.Default.EmojiEvents,
+                actionLabel = "Add a hackathon",
+                onAction = onAddHackathon,
+                modifier = Modifier.testTag("empty_add_hackathon_button")
+            )
         } else {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -1367,6 +1532,833 @@ private fun DashboardHackathonCard(
                         testTag = "verify_hackathon_button_${hackathon.hackathonId}"
                     ) {
                         Text("Verify now")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoJourneyHeader(
+    currentScreen: DemoScreen,
+    currentStep: Int,
+    onNavigate: (DemoScreen, Int) -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Guided Tour — Step $currentStep of 7",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color(0xFFD97706)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onPrev,
+                    enabled = currentStep > 1,
+                    modifier = Modifier.height(32.dp).testTag("demo_prev_button")
+                ) {
+                    Text("Back", style = MaterialTheme.typography.labelSmall)
+                }
+                Button(
+                    onClick = onNext,
+                    enabled = currentStep < 7,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF191A1C)),
+                    modifier = Modifier.height(32.dp).testTag("demo_next_button")
+                ) {
+                    Text("Next", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+
+        val screens = listOf(
+            DemoScreen.STUDENT_PROFILE to "Profile",
+            DemoScreen.REPOSITORY to "Repo",
+            DemoScreen.INTERVIEW to "AI Viva",
+            DemoScreen.ASSESSMENT to "Report",
+            DemoScreen.ADMIN_DASHBOARD to "Admin",
+            DemoScreen.FEEDBACK to "Feedback",
+            DemoScreen.RECRUITER_DASHBOARD to "Recruiter"
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            screens.forEachIndexed { index, (screen, label) ->
+                val stepNum = index + 1
+                val selected = currentScreen == screen
+                Surface(
+                    onClick = { onNavigate(screen, stepNum) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (selected) Color(0xFF191A1C) else Color(0xFFF4F3F0),
+                    modifier = Modifier.weight(1f).height(28.dp).testTag("demo_step_$stepNum")
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
+                            color = if (selected) Color.White else Color(0xFF71717A),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoStudentProfileView(state: DemoState, onSelectStudent: (String) -> Unit) {
+    val selectedStudent = DemoFixtures.students.find { it.id == state.selectedStudentId } ?: DemoFixtures.students.first()
+    var isLoading by remember(state.selectedStudentId) { mutableStateOf(true) }
+
+    LaunchedEffect(state.selectedStudentId) {
+        isLoading = true
+        kotlinx.coroutines.delay(300)
+        isLoading = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Step 1: Student Profile & Background",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Inspect pre-configured fictional student profiles demonstrating academic excellence, verified skills, and career interests.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DemoFixtures.students.forEach { student ->
+                val selected = student.id == selectedStudent.id
+                Surface(
+                    onClick = { onSelectStudent(student.id) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selected) Color(0xFF191A1C) else Color.White,
+                    border = BorderStroke(1.dp, if (selected) Color(0xFF191A1C) else Color(0xFFE7E5E0))
+                ) {
+                    Text(
+                        text = student.name,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
+                        color = if (selected) Color.White else Color(0xFF191A1C),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+
+        if (isLoading) {
+            NexusCard {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            color = Color(0xFFD97706),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = "Loading demo profile & verified records...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ForegroundSecondary
+                        )
+                    }
+                }
+            }
+        } else {
+            NexusCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = selectedStudent.name,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = NexusTokens.Foreground
+                            )
+                            Text(
+                                text = "${selectedStudent.university} · @${selectedStudent.githubUsername}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NexusTokens.ForegroundSecondary
+                            )
+                        }
+                        Surface(
+                            color = AccentEmeraldLight,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "CGPA: ${selectedStudent.cgpa}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = AccentEmerald,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Verified Skill Proficiencies:",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = NexusTokens.Foreground
+                    )
+
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        selectedStudent.skills.forEach { skill ->
+                            Surface(
+                                color = NeutralWarmSurfaceVariant,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = skill,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = NexusTokens.Foreground,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Career Interests: ${selectedStudent.interests.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NexusTokens.ForegroundSecondary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoRepositoryView(state: DemoState, onSelectProject: (String) -> Unit) {
+    val project = DemoFixtures.projects.find { it.repoFullName == state.selectedProjectId } ?: DemoFixtures.projects.first()
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Step 2: Repository Submission & AST Verification",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Analyze verified Git repositories, commit timelines, team contribution share, and automated Abstract Syntax Tree (AST) build verification.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        NexusCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = project.name,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = NexusTokens.Foreground
+                    )
+                    Surface(
+                        color = AccentEmeraldLight,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "AST Build Verified",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = AccentEmerald,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = project.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NexusTokens.ForegroundSecondary
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(text = "Language", style = MaterialTheme.typography.labelSmall, color = TextTertiaryMuted)
+                        Text(text = project.language, style = MaterialTheme.typography.titleSmall, color = NexusTokens.Foreground)
+                    }
+                    Column {
+                        Text(text = "Commits", style = MaterialTheme.typography.labelSmall, color = TextTertiaryMuted)
+                        Text(text = "${project.commits}", style = MaterialTheme.typography.titleSmall, color = NexusTokens.Foreground)
+                    }
+                    Column {
+                        Text(text = "Active Days", style = MaterialTheme.typography.labelSmall, color = TextTertiaryMuted)
+                        Text(text = "${project.activeDays}", style = MaterialTheme.typography.titleSmall, color = NexusTokens.Foreground)
+                    }
+                    Column {
+                        Text(text = "Commit Share", style = MaterialTheme.typography.labelSmall, color = TextTertiaryMuted)
+                        Text(text = "${(project.commitShare * 100).toInt()}%", style = MaterialTheme.typography.titleSmall, color = AccentEmerald)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoInterviewView(
+    state: DemoState,
+    onAnswerQuestion: (String, String) -> Unit,
+    onSkipQuestion: (String) -> Unit
+) {
+    val session = DemoFixtures.interviewSessions.first()
+    val question = session.questions.firstOrNull() ?: DemoFixtures.questions.first()
+    val currentAnswer = state.interview.answers[question.questionId] ?: question.defaultAnswer
+    val isSkipped = state.interview.skippedQuestionIds.contains(question.questionId)
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Step 3: AI Interview & Technical Viva",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Simulate AI-driven technical interviews with deterministic sample answers, voice/text input, and skip controls.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        NexusCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Question 1 of ${session.questions.size}",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFFD97706)
+                    )
+                    if (isSkipped) {
+                        Surface(
+                            color = AccentRoseLight,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Skipped",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AccentRose,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = question.question,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = NexusTokens.Foreground
+                )
+
+                Surface(
+                    color = NexusTokens.SurfaceSecondary,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, NexusTokens.Border)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Code Evidence File: ${question.file} (${question.lines})",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = NexusTokens.ForegroundSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = question.snippet,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.Foreground
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = currentAnswer,
+                    onValueChange = { newVal -> onAnswerQuestion(question.questionId, newVal) },
+                    label = { Text("Candidate Answer (Simulated / Typed)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NexusButton(
+                            onClick = { onSkipQuestion(question.questionId) },
+                            variant = NexusButtonVariant.Secondary
+                        ) {
+                            Text("Skip Question")
+                        }
+                        NexusButton(
+                            onClick = { /* Answer recorded */ },
+                            variant = NexusButtonVariant.Primary
+                        ) {
+                            Text("Submit Answer")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoAssessmentReportView(state: DemoState) {
+    val assessment = DemoFixtures.assessments.first()
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        isLoading = true
+        kotlinx.coroutines.delay(350)
+        isLoading = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Step 4: Assessment Report & Skill Breakdown",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Review comprehensive AI assessment scores, radar chart analytics, and verified source code evidence quotes.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        if (isLoading) {
+            NexusCard {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            color = Color(0xFF059669),
+                            strokeWidth = 3.dp
+                        )
+                        Text(
+                            text = "Synthesizing AI assessment report & skill metrics...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ForegroundSecondary
+                        )
+                    }
+                }
+            }
+        } else {
+            NexusCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Overall Proofolio Score",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = NexusTokens.Foreground
+                            )
+                            Text(
+                                text = "Based on AST analysis, commit activity & AI viva",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NexusTokens.ForegroundSecondary
+                            )
+                        }
+                        Surface(
+                            color = AccentEmeraldLight,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text = "${assessment.overallScore} / 100",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = AccentEmerald,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Skill Proficiency Breakdown:",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = NexusTokens.Foreground
+                    )
+
+                    assessment.skills.forEach { (skill, score) ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = formatSkillTag(skill),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.Foreground
+                                )
+                                Text(
+                                    text = "$score%",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = NexusTokens.Foreground
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { score / 100f },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = AccentEmerald,
+                                trackColor = NeutralWarmSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoFeedbackView(state: DemoState, onShareFeedback: (String, Boolean) -> Unit) {
+    val feedback = DemoFixtures.feedback
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = "Step 6: Feedback Sharing & Evaluation Summary",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Review structured assessment summaries, strengths, improvements, and control student visibility.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        NexusCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Evaluation Summary",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = NexusTokens.Foreground
+                )
+                Text(
+                    text = feedback.summary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NexusTokens.ForegroundSecondary
+                )
+
+                Text(
+                    text = "Key Strengths:",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = NexusTokens.Foreground
+                )
+                feedback.strengths.forEach { str ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(AccentEmerald))
+                        Text(text = str, style = MaterialTheme.typography.bodySmall, color = NexusTokens.Foreground)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Visible to Student Profile",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = NexusTokens.Foreground
+                    )
+                    Switch(
+                        checked = feedback.releasedToStudent,
+                        onCheckedChange = { checked -> onShareFeedback(feedback.feedbackId, checked) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DemoTabButton(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        color = if (selected) Color(0xFFD97706) else Color.White,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, if (selected) Color(0xFFB45309) else Color(0xFFE5E7EB)),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = if (selected) Color.White else Color(0xFF374151)
+            )
+        }
+    }
+}
+
+@Composable
+fun AdminDashboardDemoView(
+    demoState: DemoState? = null,
+    onToggleShortlist: (String) -> Unit = {}
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("All") }
+    val shortlistedIds = demoState?.admin?.shortlistedStudentIds ?: emptyList()
+
+    val students = DemoData.adminStudents.filter {
+        val matchesSearch = it.name.contains(searchQuery, ignoreCase = true) || it.university.contains(searchQuery, ignoreCase = true)
+        val matchesFilter = when (selectedFilter) {
+            "Approved" -> it.status == "SHARED_WITH_RECRUITER" || it.status == "APPROVED"
+            "Pending" -> it.status == "UNDER_ADMIN_REVIEW"
+            else -> true
+        }
+        matchesSearch && matchesFilter
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Step 5: Admin Control Center — Candidate Review & Matching",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Review student assessment results, verify AST builds and repository evidence, manage application status, and toggle shortlists.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search by student name or university...") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("All", "Approved", "Pending").forEach { filter ->
+                NexusButton(
+                    onClick = { selectedFilter = filter },
+                    variant = if (selectedFilter == filter) NexusButtonVariant.Primary else NexusButtonVariant.Secondary
+                ) {
+                    Text(filter)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        students.forEach { student ->
+            val isShortlisted = shortlistedIds.contains(student.id)
+            NexusCard {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = student.name,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = NexusTokens.Foreground
+                            )
+                            Text(
+                                text = "${student.university} · @${student.githubUsername}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NexusTokens.ForegroundSecondary
+                            )
+                        }
+                        ScoreBadge(score = student.score)
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatusBadge(status = student.status)
+                        Text(
+                            text = "Verified via AST & AI Viva",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentEmerald
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Admin Feedback: \"${student.feedback}\"",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ForegroundSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        NexusButton(
+                            onClick = { onToggleShortlist(student.id) },
+                            variant = if (isShortlisted) NexusButtonVariant.Primary else NexusButtonVariant.Secondary
+                        ) {
+                            Text(if (isShortlisted) "Shortlisted" else "Shortlist")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecruiterDashboardDemoView(demoState: DemoState? = null) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Step 7: Recruiter Portal — Verified Top Talent & Matching",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            color = NexusTokens.Foreground
+        )
+        Text(
+            text = "Explore pre-vetted candidates with authorized performance information, verified repository code evidence, and high AI match scores.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = NexusTokens.ForegroundSecondary
+        )
+
+        DemoData.recruiterCandidates.forEach { candidate ->
+            NexusCard {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = candidate.name,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = NexusTokens.Foreground
+                            )
+                            Text(
+                                text = "Applied for: ${candidate.roleApplied} at ${candidate.company}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NexusTokens.ForegroundSecondary
+                            )
+                        }
+                        Surface(
+                            color = AccentEmeraldLight,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "${candidate.matchScore}% Match",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = AccentEmerald,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Verified Skill Proficiencies:",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = NexusTokens.Foreground
+                    )
+
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        candidate.verifiedSkills.forEach { (skill, score) ->
+                            Surface(
+                                color = NeutralWarmSurfaceVariant,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "${formatSkillTag(skill)}: $score%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = NexusTokens.Foreground
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NexusButton(
+                                onClick = { /* View Code Evidence */ },
+                                variant = NexusButtonVariant.Secondary
+                            ) {
+                                Text("View Code Evidence")
+                            }
+                            NexusButton(
+                                onClick = { /* Contact Candidate */ },
+                                variant = NexusButtonVariant.Primary
+                            ) {
+                                Text("Contact Candidate")
+                            }
+                        }
                     }
                 }
             }

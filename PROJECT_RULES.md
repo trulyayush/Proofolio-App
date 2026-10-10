@@ -1,9 +1,9 @@
-# PROJECT_RULES.md: VerifiedBuild student app
+# PROJECT_RULES.md: Proofolio student app
 
 These rules apply to every change in this project. Read them before each task.
 
 ## What this app is
-- The student app of VerifiedBuild. A student signs up, picks one of their public GitHub repos, answers 5 questions about their own code by voice or text, and sees a report of verified skills and matched internships.
+- The student app of Proofolio. A student signs up, picks one of their public GitHub repos, answers 5 questions about their own code by voice or text, and sees a report of verified skills and matched internships.
 - Recruiters do not use this app. They use a separate web dashboard.
 - The VerifiedBuild API does all the work. This app is only its UI.
 
