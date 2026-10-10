@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Edit
@@ -97,7 +98,8 @@ fun StudentDashboardScreen(
     onSubmitNewProject: (title: String, repoUrl: String, onComplete: (Result<ProjectEntity>) -> Unit) -> Unit,
     onAcceptConnection: (String) -> Unit,
     onSendConnection: (String) -> Unit,
-    onSwitchRole: () -> Unit
+    onSwitchRole: () -> Unit,
+    onLogout: () -> Unit = onSwitchRole
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showAddProjectDialog by remember { mutableStateOf(false) }
@@ -235,6 +237,26 @@ fun StudentDashboardScreen(
                                     Icons.Default.Edit,
                                     contentDescription = "Edit Profile",
                                     tint = NexusTokens.ForegroundSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(NexusTokens.Radius.sm),
+                            color = NexusTokens.SurfaceSecondary,
+                            border = BorderStroke(1.dp, NexusTokens.Border)
+                        ) {
+                            IconButton(
+                                onClick = onLogout,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .testTag("logout_student_button")
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = "Log Out",
+                                    tint = NexusTokens.Foreground,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }

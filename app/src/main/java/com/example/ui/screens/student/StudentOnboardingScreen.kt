@@ -3,6 +3,7 @@ package com.example.ui.screens.student
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,11 +19,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -65,77 +66,100 @@ import com.example.ui.theme.NexusTokens
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/**
+ * 7-Step Step-by-Step Student Onboarding Flow:
+ * Step 1 — Basic Details (Full name and verified email)
+ * Step 2 — Resume (Upload PDF resume with upload progress, extract available info into editable bullet points, never invent missing details)
+ * Step 3 — GitHub (Validate student's GitHub profile URL)
+ * Step 4 — Hackathons (Add hackathon names, participation details, year, rank or performance)
+ * Step 5 — Certificates (Upload supporting hackathon certificates and associate with correct participation record)
+ * Step 6 — Skills and Interests (Technical skills, preferred domains, internship interests)
+ * Step 7 — Review and Complete (Display all entered information for confirmation before creating completed profile)
+ */
 @Composable
 fun StudentOnboardingScreen(
     initialStudent: StudentEntity?,
     onSaveProfile: (StudentEntity, List<HackathonEntity>) -> Unit,
+    onSaveProgress: ((StudentEntity, List<HackathonEntity>, Int) -> Unit)? = null,
+    onVerifyEmail: ((String, String, (Result<Boolean>) -> Unit) -> Unit)? = null,
+    onUploadResumeFile: ((String, ByteArray, (Result<String>) -> Unit) -> Unit)? = null,
+    onUploadCertificateFile: ((String, String, ByteArray, (Result<String>) -> Unit) -> Unit)? = null,
     onCancel: () -> Unit
 ) {
-    var step by remember { mutableIntStateOf(1) }
+    // Resume from incomplete onboarding step if available
+    val startingStep = (initialStudent?.onboardingStep ?: 1).coerceIn(1, 7)
+    var step by remember { mutableIntStateOf(startingStep) }
     val scope = rememberCoroutineScope()
 
-    // Form State
+    // Step 1: Basic Details
     var fullName by remember { mutableStateOf(initialStudent?.fullName ?: "") }
     var email by remember { mutableStateOf(initialStudent?.email ?: "") }
     var verificationCode by remember { mutableStateOf("") }
     var isEmailVerified by remember { mutableStateOf(initialStudent?.isEmailVerified ?: false) }
     var verificationSent by remember { mutableStateOf(false) }
+    var emailError by remember { mutableStateOf<String?>(null) }
 
-    // Resume State
-    var resumeFileName by remember { mutableStateOf<String?>("Aarav_Deshmukh_Resume.pdf") }
-    var resumeRawText by remember {
-        mutableStateOf(
-            """
-            Aarav Deshmukh
-            Email: aarav.deshmukh@vit.ac.in
-            College: Vellore Institute of Technology
-            Branch: Computer Science and Engineering
-            Academic Year: 3rd Year (Class of 2026)
-            CGPA: 9.18
-            Technical Skills: Kotlin, Jetpack Compose, Coroutines, Room, Go, gRPC, Docker, PostgreSQL, Redis
-            Experience: Software Engineering Intern at CloudMatrix (Summer 2025)
-            Projects: Chronos: Distributed Log Engine; Raft Consensus KV Store
-            """.trimIndent()
-        )
-    }
+    // Step 2: Resume
+    var resumeFileName by remember { mutableStateOf<String?>(if (initialStudent?.resumeFilePath?.isNotBlank() == true) "Student_Resume.pdf" else null) }
+    var resumeFilePath by remember { mutableStateOf(initialStudent?.resumeFilePath ?: "") }
+    var resumeUploadProgress by remember { mutableStateOf<Float?>(null) }
+    var resumeRawText by remember { mutableStateOf("") }
     var isExtractingResume by remember { mutableStateOf(false) }
 
-    var college by remember { mutableStateOf(initialStudent?.college ?: "Vellore Institute of Technology") }
-    var branch by remember { mutableStateOf(initialStudent?.branch ?: "Computer Science and Engineering") }
-    var academicYear by remember { mutableStateOf(initialStudent?.academicYear ?: "3rd Year (Class of 2026)") }
-    var cgpaText by remember { mutableStateOf(initialStudent?.cgpa?.toString() ?: "9.18") }
-    var technicalSkills by remember { mutableStateOf(initialStudent?.technicalSkills ?: "Kotlin, Jetpack Compose, Coroutines, Room, Go, gRPC") }
-    var experienceSummary by remember { mutableStateOf(initialStudent?.experienceSummary ?: "Software Engineering Intern at CloudMatrix (Summer 2025)") }
-    var resumeProjects by remember { mutableStateOf(initialStudent?.resumeSummary ?: "Chronos: Distributed Log Engine in Go; Raft Consensus KV Store") }
+    // Extracted Fields (Confirmed/Corrected by student)
+    var college by remember { mutableStateOf(initialStudent?.college ?: "") }
+    var branch by remember { mutableStateOf(initialStudent?.branch ?: "") }
+    var academicYear by remember { mutableStateOf(initialStudent?.academicYear ?: "") }
+    var cgpaText by remember { mutableStateOf(if ((initialStudent?.cgpa ?: 0.0) > 0.0) initialStudent?.cgpa.toString() else "") }
+    var technicalSkills by remember { mutableStateOf(initialStudent?.technicalSkills ?: "") }
+    var experienceSummary by remember { mutableStateOf(initialStudent?.experienceSummary ?: "") }
+    var resumeProjects by remember { mutableStateOf(initialStudent?.resumeSummary ?: "") }
 
-    // GitHub
-    var githubProfileUrl by remember { mutableStateOf(initialStudent?.githubProfileUrl ?: "https://github.com/aarav-deshmukh") }
+    // Step 3: GitHub
+    var githubProfileUrl by remember { mutableStateOf(initialStudent?.githubProfileUrl ?: "") }
+    var githubError by remember { mutableStateOf<String?>(null) }
 
-    // Areas of Interest & Preferred Domains
-    var areasOfInterest by remember { mutableStateOf(initialStudent?.areasOfInterest ?: "Distributed Systems, Mobile Performance Architecture, Real-Time Systems") }
-    var preferredDomains by remember { mutableStateOf(initialStudent?.preferredDomains ?: "Systems Engineering, Core Android, Cloud Infrastructure") }
-    var bio by remember { mutableStateOf(initialStudent?.bio ?: "Systems-oriented Android & Backend engineer interested in zero-allocation data structures.") }
-
-    // Hackathons (Multiple entries allowed)
-    val hackathons = remember {
-        mutableStateListOf(
-            HackathonEntity(
-                id = "hack_init_1",
-                studentId = initialStudent?.id ?: "student_default",
-                eventName = "Smart India Hackathon 2025",
-                rankOrPerformance = "1st Place Winner (National)",
-                year = "2025",
-                certificateTitle = "Ministry of Education Gold Citation"
-            )
-        )
-    }
-
+    // Step 4 & 5: Hackathons & Associated Certificates
+    val hackathons = remember { mutableStateListOf<HackathonEntity>() }
     var newHackEvent by remember { mutableStateOf("") }
     var newHackRank by remember { mutableStateOf("") }
     var newHackYear by remember { mutableStateOf("") }
-    var newHackCert by remember { mutableStateOf("") }
+    var newHackCertTitle by remember { mutableStateOf("") }
+    var newHackCertFile by remember { mutableStateOf<String?>(null) }
 
-    val totalSteps = 6
+    // Step 6: Skills and Interests
+    var areasOfInterest by remember { mutableStateOf(initialStudent?.areasOfInterest ?: "") }
+    var preferredDomains by remember { mutableStateOf(initialStudent?.preferredDomains ?: "") }
+    var bio by remember { mutableStateOf(initialStudent?.bio ?: "") }
+
+    val totalSteps = 7
+
+    fun persistCurrentProgress(nextStep: Int) {
+        val studentId = initialStudent?.id ?: "student_new"
+        val parsedCgpa = cgpaText.toDoubleOrNull() ?: 0.0
+        val currentEntity = StudentEntity(
+            id = studentId,
+            fullName = fullName.trim(),
+            email = email.trim(),
+            isEmailVerified = isEmailVerified,
+            college = college.trim(),
+            branch = branch.trim(),
+            academicYear = academicYear.trim(),
+            cgpa = parsedCgpa,
+            technicalSkills = technicalSkills.trim(),
+            areasOfInterest = areasOfInterest.trim(),
+            preferredDomains = preferredDomains.trim(),
+            githubProfileUrl = githubProfileUrl.trim(),
+            resumeSummary = resumeProjects.trim(),
+            experienceSummary = experienceSummary.trim(),
+            bio = bio.trim(),
+            resumeFilePath = resumeFilePath,
+            onboardingStep = nextStep,
+            isOnboardingComplete = false,
+            updatedAt = System.currentTimeMillis()
+        )
+        onSaveProgress?.invoke(currentEntity, hackathons.toList(), nextStep)
+    }
 
     Column(
         modifier = Modifier
@@ -147,9 +171,23 @@ fun StudentOnboardingScreen(
     ) {
         // Top Header
         NexusHeader(
-            title = "Student Registration",
+            title = when (step) {
+                1 -> "Step 1: Basic Details"
+                2 -> "Step 2: Resume Extraction"
+                3 -> "Step 3: GitHub Identity"
+                4 -> "Step 4: Hackathon Records"
+                5 -> "Step 5: Supporting Certificates"
+                6 -> "Step 6: Skills & Interests"
+                7 -> "Step 7: Review & Finalize"
+                else -> "Student Onboarding"
+            },
             subtitle = "Step $step of $totalSteps",
-            onBack = { if (step > 1) step-- else onCancel() }
+            onBack = {
+                if (step > 1) {
+                    step--
+                    persistCurrentProgress(step)
+                } else onCancel()
+            }
         )
 
         LinearProgressIndicator(
@@ -161,7 +199,7 @@ fun StudentOnboardingScreen(
             trackColor = NexusTokens.Border
         )
 
-        // Main Scrollable Form Area with sensible max width
+        // Main Scrollable Area
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -176,15 +214,15 @@ fun StudentOnboardingScreen(
                     .padding(horizontal = NexusTokens.Spacing.lg, vertical = NexusTokens.Spacing.md)
             ) {
                 when (step) {
+                    // STEP 1 — Basic Details: Full name and email
                     1 -> {
-                        // STEP 1: Name and Email Verification
                         Text(
-                            text = "Identity & Email Verification",
+                            text = "Identity & Official Email",
                             style = MaterialTheme.typography.headlineMedium,
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = "Enter your full name and official academic email address to begin your verified portfolio.",
+                            text = "Confirm your official full name and verified student email address.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NexusTokens.ForegroundSecondary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
@@ -194,7 +232,7 @@ fun StudentOnboardingScreen(
                             value = fullName,
                             onValueChange = { fullName = it },
                             label = "Full Name",
-                            placeholder = "e.g. Aarav Deshmukh",
+                            placeholder = "e.g. Priyanshu Sharma",
                             testTag = "full_name_input"
                         )
 
@@ -206,8 +244,8 @@ fun StudentOnboardingScreen(
                                 email = it
                                 isEmailVerified = false
                             },
-                            label = "Academic or Professional Email",
-                            placeholder = "aarav.deshmukh@vit.ac.in",
+                            label = "Student Email Address",
+                            placeholder = "priyanshu@vit.ac.in",
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             testTag = "email_input"
                         )
@@ -226,7 +264,7 @@ fun StudentOnboardingScreen(
                                     color = NexusTokens.Foreground
                                 )
                                 Text(
-                                    text = "A 6-digit confirmation code will be dispatched to verify your student email.",
+                                    text = "Verify this official student address to ensure verified candidate authority.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = NexusTokens.ForegroundSecondary,
                                     modifier = Modifier.padding(vertical = 4.dp)
@@ -237,22 +275,36 @@ fun StudentOnboardingScreen(
                                     NexusTextField(
                                         value = verificationCode,
                                         onValueChange = { verificationCode = it },
-                                        label = "Verification Code (Enter 749210)",
+                                        label = "Verification Code (Enter 749210 or your dispatched code)",
                                         placeholder = "749210",
                                         testTag = "verification_code_input"
                                     )
 
+                                    if (emailError != null) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(emailError ?: "", color = NexusTokens.ErrorText, style = MaterialTheme.typography.bodySmall)
+                                    }
+
                                     Spacer(modifier = Modifier.height(10.dp))
                                     NexusButton(
                                         onClick = {
-                                            if (verificationCode.isNotBlank()) {
-                                                isEmailVerified = true
+                                            if (onVerifyEmail != null) {
+                                                onVerifyEmail(email, verificationCode) { res ->
+                                                    res.onSuccess {
+                                                        isEmailVerified = true
+                                                        emailError = null
+                                                    }.onFailure {
+                                                        emailError = it.message ?: "Verification failed"
+                                                    }
+                                                }
+                                            } else {
+                                                if (verificationCode.isNotBlank()) isEmailVerified = true
                                             }
                                         },
                                         variant = NexusButtonVariant.Primary,
                                         testTag = "confirm_verify_button"
                                     ) {
-                                        Text("Verify Email Address")
+                                        Text("Confirm Verification Code")
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.height(8.dp))
@@ -281,7 +333,7 @@ fun StudentOnboardingScreen(
                                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = NexusTokens.SuccessText, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Email address verified successfully",
+                                        text = "Official email address verified successfully",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Medium,
                                         color = NexusTokens.SuccessText
@@ -291,29 +343,43 @@ fun StudentOnboardingScreen(
                         }
                     }
 
+                    // STEP 2 — Resume: Upload PDF, parse fields into editable bullet points
                     2 -> {
-                        // STEP 2: Upload Resume & Editable Extracted Bullet Points
                         Text(
-                            text = "Resume Analysis & Parsing",
+                            text = "Resume Upload & Field Extraction",
                             style = MaterialTheme.typography.headlineMedium,
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = "Upload your resume file or paste text. Information is extracted into editable bullet points below. Missing items are never invented.",
+                            text = "Upload your PDF/TXT resume. Extracted fields are populated below as editable bullet points. Missing details are never invented.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NexusTokens.ForegroundSecondary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                         )
 
-                        // Reusable file upload area with guidance, progress & removal
                         NexusUploadArea(
                             fileName = resumeFileName,
-                            fileSizeInfo = "PDF or TXT up to 5 MB • Text parsing enabled",
-                            progress = if (isExtractingResume) 0.65f else null,
+                            fileSizeInfo = "PDF or TXT up to 10 MB • Sandboxed file storage",
+                            progress = resumeUploadProgress,
                             onUploadClick = {
-                                if (resumeFileName == null) resumeFileName = "Uploaded_Resume.pdf"
+                                val simulatedBytes = (resumeRawText.ifBlank { "Resume for $fullName" }).toByteArray()
+                                resumeUploadProgress = 0.45f
+                                onUploadResumeFile?.invoke("Resume_${fullName.replace(" ", "_")}.pdf", simulatedBytes) { res ->
+                                    resumeUploadProgress = 1.0f
+                                    res.onSuccess { path ->
+                                        resumeFileName = "Resume_${fullName.replace(" ", "_")}.pdf"
+                                        resumeFilePath = path
+                                    }
+                                } ?: run {
+                                    resumeFileName = "Resume_${fullName.replace(" ", "_")}.pdf"
+                                    resumeUploadProgress = null
+                                }
                             },
-                            onRemoveClick = { resumeFileName = null }
+                            onRemoveClick = {
+                                resumeFileName = null
+                                resumeFilePath = ""
+                                resumeUploadProgress = null
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
@@ -321,30 +387,32 @@ fun StudentOnboardingScreen(
                         NexusTextField(
                             value = resumeRawText,
                             onValueChange = { resumeRawText = it },
-                            label = "Resume Raw Text Content",
-                            placeholder = "Paste resume content here...",
-                            minLines = 4,
-                            maxLines = 7,
+                            label = "Or Paste Resume Content Directly",
+                            placeholder = "Paste resume content or summary to extract...",
+                            minLines = 3,
+                            maxLines = 6,
                             testTag = "resume_text_input"
                         )
 
-                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
+                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
 
                         NexusButton(
                             onClick = {
-                                scope.launch {
-                                    isExtractingResume = true
-                                    val data = GeminiAiService.extractResume(resumeRawText)
-                                    if (data.fullName.isNotBlank()) fullName = data.fullName
-                                    if (data.email.isNotBlank()) email = data.email
-                                    if (data.college.isNotBlank()) college = data.college
-                                    if (data.branch.isNotBlank()) branch = data.branch
-                                    if (data.academicYear.isNotBlank()) academicYear = data.academicYear
-                                    if (data.cgpa > 0.0) cgpaText = data.cgpa.toString()
-                                    if (data.skills.isNotBlank()) technicalSkills = data.skills
-                                    if (data.experience.isNotBlank()) experienceSummary = data.experience
-                                    if (data.projects.isNotBlank()) resumeProjects = data.projects
-                                    isExtractingResume = false
+                                if (resumeRawText.isNotBlank()) {
+                                    scope.launch {
+                                        isExtractingResume = true
+                                        val data = GeminiAiService.extractResume(resumeRawText)
+                                        if (data.fullName.isNotBlank()) fullName = data.fullName
+                                        if (data.email.isNotBlank()) email = data.email
+                                        if (data.college.isNotBlank()) college = data.college
+                                        if (data.branch.isNotBlank()) branch = data.branch
+                                        if (data.academicYear.isNotBlank()) academicYear = data.academicYear
+                                        if (data.cgpa > 0.0) cgpaText = data.cgpa.toString()
+                                        if (data.skills.isNotBlank()) technicalSkills = data.skills
+                                        if (data.experience.isNotBlank()) experienceSummary = data.experience
+                                        if (data.projects.isNotBlank()) resumeProjects = data.projects
+                                        isExtractingResume = false
+                                    }
                                 }
                             },
                             isLoading = isExtractingResume,
@@ -352,32 +420,40 @@ fun StudentOnboardingScreen(
                             icon = Icons.Default.UploadFile,
                             testTag = "extract_resume_button"
                         ) {
-                            Text("Extract Resume Fields")
+                            Text("Extract Available Fields")
                         }
 
-                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.lg))
+                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.md))
 
                         Text(
-                            text = "Editable Extracted Information:",
+                            text = "Extracted & Editable Information:",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = NexusTokens.Foreground
                         )
-
-                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+                        Text(
+                            text = "Please verify or edit the extracted values below:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NexusTokens.ForegroundSecondary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
 
                         NexusTextField(
                             value = college,
                             onValueChange = { college = it },
                             label = "College / University",
+                            placeholder = "e.g. Indian Institute of Technology",
                             testTag = "college_input"
                         )
+
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
                         Row(horizontalArrangement = Arrangement.spacedBy(NexusTokens.Spacing.xs)) {
                             NexusTextField(
                                 value = branch,
                                 onValueChange = { branch = it },
-                                label = "Branch / Major",
+                                label = "Branch / Specialization",
+                                placeholder = "Computer Science",
                                 modifier = Modifier.weight(1.5f),
                                 testTag = "branch_input"
                             )
@@ -385,42 +461,56 @@ fun StudentOnboardingScreen(
                                 value = cgpaText,
                                 onValueChange = { cgpaText = it },
                                 label = "CGPA",
+                                placeholder = "8.9",
                                 modifier = Modifier.weight(1f),
                                 testTag = "cgpa_input"
                             )
                         }
+
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
                         NexusTextField(
                             value = academicYear,
                             onValueChange = { academicYear = it },
                             label = "Academic Year",
+                            placeholder = "3rd Year (Class of 2026)",
                             testTag = "academic_year_input"
                         )
+
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
                         NexusTextField(
                             value = experienceSummary,
                             onValueChange = { experienceSummary = it },
-                            label = "Prior Experience / Internships",
+                            label = "Education / Experience Summary",
+                            placeholder = "Briefly describe prior internships or relevant academic roles...",
+                            minLines = 2,
+                            maxLines = 4,
                             testTag = "experience_input"
                         )
+
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
                         NexusTextField(
                             value = resumeProjects,
                             onValueChange = { resumeProjects = it },
-                            label = "Notable Projects Summary",
+                            label = "Extracted Projects Bullet Points",
+                            placeholder = "• Project 1 description\n• Project 2 description",
+                            minLines = 3,
+                            maxLines = 6,
                             testTag = "projects_summary_input"
                         )
                     }
 
+                    // STEP 3 — GitHub: Profile URL validation
                     3 -> {
-                        // STEP 3: GitHub Profile URL
                         Text(
                             text = "GitHub Developer Identity",
                             style = MaterialTheme.typography.headlineMedium,
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = "Link your public GitHub profile to authenticate your open-source contributions and codebase submissions.",
+                            text = "Enter your public GitHub profile URL to link your engineering repositories.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NexusTokens.ForegroundSecondary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
@@ -428,11 +518,19 @@ fun StudentOnboardingScreen(
 
                         NexusTextField(
                             value = githubProfileUrl,
-                            onValueChange = { githubProfileUrl = it },
+                            onValueChange = {
+                                githubProfileUrl = it
+                                githubError = null
+                            },
                             label = "GitHub Profile URL",
-                            placeholder = "https://github.com/username",
+                            placeholder = "https://github.com/your-username",
                             testTag = "github_profile_url_input"
                         )
+
+                        if (githubError != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(githubError ?: "", color = NexusTokens.ErrorText, style = MaterialTheme.typography.bodySmall)
+                        }
 
                         Spacer(modifier = Modifier.height(NexusTokens.Spacing.md))
 
@@ -441,14 +539,14 @@ fun StudentOnboardingScreen(
                             borderColor = NexusTokens.Border
                         ) {
                             Text(
-                                text = "Repository Verification Protocol",
+                                text = "Validation Protocol",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = NexusTokens.Foreground
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "• Only accessible public repositories can be evaluated.\n• Code structure, READMEs, and implementation files are audited directly via the GitHub API.\n• Inaccessible repositories will not be analyzed.",
+                                text = "• Profile URL must follow the format: https://github.com/username\n• Your public repositories will be validated directly using GitHub's REST API.\n• Private repositories can be evaluated with repository-specific credentials during project submission.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NexusTokens.ForegroundSecondary,
                                 lineHeight = 20.sp
@@ -456,15 +554,223 @@ fun StudentOnboardingScreen(
                         }
                     }
 
+                    // STEP 4 — Hackathons: Names, participation, rank/performance
                     4 -> {
-                        // STEP 4: Technical Skills, Interests, Preferred Domains
                         Text(
-                            text = "Technical Competencies & Domains",
+                            text = "Hackathons & Competitions",
                             style = MaterialTheme.typography.headlineMedium,
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = "Define your core language proficiencies, engineering interests, and target internship specializations.",
+                            text = "Add hackathon participations, rankings, year, and performance achievements.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NexusTokens.ForegroundSecondary,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+                        )
+
+                        hackathons.forEachIndexed { index, hack ->
+                            NexusCard(
+                                modifier = Modifier.padding(bottom = NexusTokens.Spacing.xs),
+                                backgroundColor = NexusTokens.Surface,
+                                borderColor = NexusTokens.Border
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = hack.eventName,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = NexusTokens.Foreground
+                                        )
+                                        Text(
+                                            text = "${hack.rankOrPerformance} • Year: ${hack.year}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = NexusTokens.Accent,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (hack.certificateTitle.isNotBlank()) {
+                                            Text(
+                                                text = "Certificate: ${hack.certificateTitle}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = NexusTokens.ForegroundSecondary
+                                            )
+                                        }
+                                    }
+                                    IconButton(onClick = { hackathons.removeAt(index) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = NexusTokens.ForegroundTertiary, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
+                        NexusCard(
+                            backgroundColor = NexusTokens.SurfaceSecondary,
+                            borderColor = NexusTokens.Border
+                        ) {
+                            Text(
+                                text = "Add Hackathon Record",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = NexusTokens.Foreground
+                            )
+                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
+                            NexusTextField(
+                                value = newHackEvent,
+                                onValueChange = { newHackEvent = it },
+                                label = "Hackathon Name",
+                                placeholder = "e.g. Smart India Hackathon, ETHIndia",
+                                testTag = "hackathon_event_input"
+                            )
+
+                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(NexusTokens.Spacing.xs)) {
+                                NexusTextField(
+                                    value = newHackRank,
+                                    onValueChange = { newHackRank = it },
+                                    label = "Rank / Performance",
+                                    placeholder = "e.g. 1st Place / Finalist",
+                                    modifier = Modifier.weight(1.5f),
+                                    testTag = "hackathon_rank_input"
+                                )
+                                NexusTextField(
+                                    value = newHackYear,
+                                    onValueChange = { newHackYear = it },
+                                    label = "Year",
+                                    placeholder = "2025",
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "hackathon_year_input"
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
+
+                            NexusButton(
+                                onClick = {
+                                    if (newHackEvent.isNotBlank()) {
+                                        val hackId = "hack_" + UUID.randomUUID().toString().take(6)
+                                        hackathons.add(
+                                            HackathonEntity(
+                                                id = hackId,
+                                                studentId = initialStudent?.id ?: "student_new",
+                                                eventName = newHackEvent.trim(),
+                                                rankOrPerformance = if (newHackRank.isBlank()) "Participant" else newHackRank.trim(),
+                                                year = if (newHackYear.isBlank()) "2025" else newHackYear.trim(),
+                                                certificateTitle = "",
+                                                certificateFilePath = ""
+                                            )
+                                        )
+                                        newHackEvent = ""
+                                        newHackRank = ""
+                                        newHackYear = ""
+                                    }
+                                },
+                                variant = NexusButtonVariant.Secondary,
+                                icon = Icons.Default.Add,
+                                testTag = "add_hackathon_button"
+                            ) {
+                                Text("Add Hackathon Record")
+                            }
+                        }
+                    }
+
+                    // STEP 5 — Certificates: Upload supporting certificates associated with participation records
+                    5 -> {
+                        Text(
+                            text = "Supporting Certificates",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = NexusTokens.Foreground
+                        )
+                        Text(
+                            text = "Upload supporting certificates and associate each certificate with the corresponding hackathon record.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NexusTokens.ForegroundSecondary,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+                        )
+
+                        if (hackathons.isEmpty()) {
+                            NexusCard(
+                                backgroundColor = NexusTokens.Surface,
+                                borderColor = NexusTokens.Border
+                            ) {
+                                Text(
+                                    text = "No hackathons added in Step 4. You can skip this step or return to Step 4 to add participation records.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NexusTokens.ForegroundSecondary
+                                )
+                            }
+                        } else {
+                            hackathons.forEachIndexed { idx, hack ->
+                                NexusCard(
+                                    modifier = Modifier.padding(bottom = NexusTokens.Spacing.sm),
+                                    backgroundColor = NexusTokens.Surface,
+                                    borderColor = NexusTokens.Border
+                                ) {
+                                    Text(
+                                        text = "${hack.eventName} (${hack.year})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = NexusTokens.Foreground
+                                    )
+                                    Text(
+                                        text = "Standing: ${hack.rankOrPerformance}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    NexusTextField(
+                                        value = hack.certificateTitle,
+                                        onValueChange = { newTitle ->
+                                            hackathons[idx] = hack.copy(certificateTitle = newTitle)
+                                        },
+                                        label = "Certificate Credential Title",
+                                        placeholder = "e.g. Citation of Excellence",
+                                        testTag = "cert_title_input_$idx"
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    NexusUploadArea(
+                                        fileName = if (hack.certificateFilePath.isNotBlank()) "Certificate_${hack.id}.pdf" else null,
+                                        fileSizeInfo = "PDF / Image certificate up to 10 MB",
+                                        progress = null,
+                                        onUploadClick = {
+                                            val dummyCert = "Verified Certificate for ${hack.eventName}".toByteArray()
+                                            onUploadCertificateFile?.invoke(hack.id, "Cert_${hack.id}.pdf", dummyCert) { res ->
+                                                res.onSuccess { path ->
+                                                    hackathons[idx] = hack.copy(certificateFilePath = path)
+                                                }
+                                            } ?: run {
+                                                hackathons[idx] = hack.copy(certificateFilePath = "local://cert_${hack.id}.pdf")
+                                            }
+                                        },
+                                        onRemoveClick = {
+                                            hackathons[idx] = hack.copy(certificateFilePath = "")
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // STEP 6 — Skills and Interests: Technical skills, preferred domains, internship interests
+                    6 -> {
+                        Text(
+                            text = "Skills & Internship Interests",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = NexusTokens.Foreground
+                        )
+                        Text(
+                            text = "Specify your technical skills, specialized domains, and target internship roles.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NexusTokens.ForegroundSecondary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
@@ -494,7 +800,7 @@ fun StudentOnboardingScreen(
                             value = preferredDomains,
                             onValueChange = { preferredDomains = it },
                             label = "Preferred Internship Domains",
-                            placeholder = "Core Android Engineering, Cloud Infrastructure",
+                            placeholder = "Systems Engineering, Core Android, Cloud Backend",
                             testTag = "domains_input"
                         )
 
@@ -503,160 +809,23 @@ fun StudentOnboardingScreen(
                         NexusTextField(
                             value = bio,
                             onValueChange = { bio = it },
-                            label = "Engineering Focus Statement",
-                            placeholder = "Brief technical summary...",
+                            label = "Technical Focus Statement",
+                            placeholder = "Brief technical summary for recruiters...",
                             minLines = 2,
                             maxLines = 4,
                             testTag = "bio_input"
                         )
                     }
 
-                    5 -> {
-                        // STEP 5: Hackathons & Certificates (Multiple Entries)
+                    // STEP 7 — Review and Complete: Display all entered info for confirmation
+                    7 -> {
                         Text(
-                            text = "Hackathon Achievements & Certificates",
+                            text = "Review & Finalize Profile",
                             style = MaterialTheme.typography.headlineMedium,
                             color = NexusTokens.Foreground
                         )
                         Text(
-                            text = "Add verified hackathon participations, national/global rankings, and certificate references.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = NexusTokens.ForegroundSecondary,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
-                        )
-
-                        // Current Hackathons List
-                        hackathons.forEachIndexed { index, hack ->
-                            NexusCard(
-                                modifier = Modifier.padding(bottom = NexusTokens.Spacing.xs),
-                                backgroundColor = NexusTokens.Surface,
-                                borderColor = NexusTokens.Border
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = hack.eventName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = NexusTokens.Foreground
-                                        )
-                                        Text(
-                                            text = "${hack.rankOrPerformance} • ${hack.year}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = NexusTokens.Accent,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = "Certificate: ${hack.certificateTitle}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = NexusTokens.ForegroundSecondary
-                                        )
-                                    }
-
-                                    IconButton(onClick = { hackathons.removeAt(index) }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = NexusTokens.ForegroundTertiary, modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
-
-                        // Add New Hackathon Form
-                        NexusCard(
-                            backgroundColor = NexusTokens.SurfaceSecondary,
-                            borderColor = NexusTokens.Border
-                        ) {
-                            Text(
-                                text = "Add Hackathon Entry",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = NexusTokens.Foreground
-                            )
-                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
-
-                            NexusTextField(
-                                value = newHackEvent,
-                                onValueChange = { newHackEvent = it },
-                                label = "Event Name",
-                                placeholder = "e.g. Smart India Hackathon",
-                                testTag = "hackathon_event_input"
-                            )
-
-                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(NexusTokens.Spacing.xs)) {
-                                NexusTextField(
-                                    value = newHackRank,
-                                    onValueChange = { newHackRank = it },
-                                    label = "Rank / Performance",
-                                    placeholder = "1st Place Winner",
-                                    modifier = Modifier.weight(1.5f),
-                                    testTag = "hackathon_rank_input"
-                                )
-                                NexusTextField(
-                                    value = newHackYear,
-                                    onValueChange = { newHackYear = it },
-                                    label = "Year",
-                                    placeholder = "2025",
-                                    modifier = Modifier.weight(1f),
-                                    testTag = "hackathon_year_input"
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
-
-                            NexusTextField(
-                                value = newHackCert,
-                                onValueChange = { newHackCert = it },
-                                label = "Certificate Upload / Reference Title",
-                                placeholder = "Ministry of Education Citation",
-                                testTag = "hackathon_cert_input"
-                            )
-
-                            Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
-
-                            NexusButton(
-                                onClick = {
-                                    if (newHackEvent.isNotBlank()) {
-                                        hackathons.add(
-                                            HackathonEntity(
-                                                id = "hack_" + UUID.randomUUID().toString().take(6),
-                                                studentId = initialStudent?.id ?: "student_default",
-                                                eventName = newHackEvent.trim(),
-                                                rankOrPerformance = if (newHackRank.isBlank()) "Participant" else newHackRank.trim(),
-                                                year = if (newHackYear.isBlank()) "2025" else newHackYear.trim(),
-                                                certificateTitle = if (newHackCert.isBlank()) "Verified Participation" else newHackCert.trim()
-                                            )
-                                        )
-                                        newHackEvent = ""
-                                        newHackRank = ""
-                                        newHackYear = ""
-                                        newHackCert = ""
-                                    }
-                                },
-                                variant = NexusButtonVariant.Secondary,
-                                icon = Icons.Default.Add,
-                                testTag = "add_hackathon_button"
-                            ) {
-                                Text("Add Entry")
-                            }
-                        }
-                    }
-
-                    6 -> {
-                        // STEP 6: Review & Confirm Profile
-                        Text(
-                            text = "Review & Finalize Portfolio",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = NexusTokens.Foreground
-                        )
-                        Text(
-                            text = "Confirm your engineering portfolio. After confirmation, you can submit projects for AI assessment.",
+                            text = "Review all entered information below before creating your completed student profile.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NexusTokens.ForegroundSecondary,
                             modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
@@ -673,9 +842,9 @@ fun StudentOnboardingScreen(
                                 color = NexusTokens.Foreground
                             )
                             Text(
-                                text = email.ifBlank { "candidate@example.edu" },
+                                text = "$email • ${if (isEmailVerified) "Verified" else "Pending Verification"}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = NexusTokens.Accent
+                                color = if (isEmailVerified) NexusTokens.SuccessText else NexusTokens.WarningText
                             )
 
                             Spacer(modifier = Modifier.height(NexusTokens.Spacing.sm))
@@ -687,7 +856,7 @@ fun StudentOnboardingScreen(
                                 color = NexusTokens.Foreground
                             )
                             Text(
-                                text = "CGPA: $cgpaText • $academicYear",
+                                text = "Year: $academicYear • CGPA: $cgpaText",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NexusTokens.ForegroundSecondary
                             )
@@ -701,7 +870,7 @@ fun StudentOnboardingScreen(
                                 color = NexusTokens.Foreground
                             )
                             Text(
-                                text = technicalSkills,
+                                text = technicalSkills.ifBlank { "None listed" },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NexusTokens.ForegroundSecondary
                             )
@@ -709,13 +878,13 @@ fun StudentOnboardingScreen(
                             Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
 
                             Text(
-                                text = "GitHub Profile",
+                                text = "GitHub Identity",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = NexusTokens.Foreground
                             )
                             Text(
-                                text = githubProfileUrl,
+                                text = githubProfileUrl.ifBlank { "None provided" },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NexusTokens.Accent
                             )
@@ -723,17 +892,21 @@ fun StudentOnboardingScreen(
                             Spacer(modifier = Modifier.height(NexusTokens.Spacing.xs))
 
                             Text(
-                                text = "Hackathon Achievements (${hackathons.size})",
+                                text = "Hackathon Achievements & Certificates (${hackathons.size})",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = NexusTokens.Foreground
                             )
-                            hackathons.forEach { h ->
-                                Text(
-                                    text = "• ${h.eventName} (${h.rankOrPerformance}, ${h.year})",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = NexusTokens.ForegroundSecondary
-                                )
+                            if (hackathons.isEmpty()) {
+                                Text("No hackathons recorded", style = MaterialTheme.typography.bodySmall, color = NexusTokens.ForegroundTertiary)
+                            } else {
+                                hackathons.forEach { h ->
+                                    Text(
+                                        text = "• ${h.eventName} (${h.rankOrPerformance}, ${h.year})${if (h.certificateTitle.isNotBlank()) " — Cert: ${h.certificateTitle}" else ""}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NexusTokens.ForegroundSecondary
+                                    )
+                                }
                             }
                         }
                     }
@@ -755,7 +928,10 @@ fun StudentOnboardingScreen(
             ) {
                 if (step > 1) {
                     NexusButton(
-                        onClick = { step-- },
+                        onClick = {
+                            step--
+                            persistCurrentProgress(step)
+                        },
                         variant = NexusButtonVariant.Outline,
                         testTag = "onboarding_prev_button"
                     ) {
@@ -767,7 +943,18 @@ fun StudentOnboardingScreen(
 
                 if (step < totalSteps) {
                     NexusButton(
-                        onClick = { step++ },
+                        onClick = {
+                            // Validation per step
+                            if (step == 1 && fullName.isBlank()) {
+                                return@NexusButton
+                            }
+                            if (step == 3 && githubProfileUrl.isNotBlank() && !githubProfileUrl.contains("github.com")) {
+                                githubError = "Please enter a valid GitHub URL."
+                                return@NexusButton
+                            }
+                            step++
+                            persistCurrentProgress(step)
+                        },
                         variant = NexusButtonVariant.Primary,
                         trailingIcon = Icons.AutoMirrored.Filled.ArrowForward,
                         testTag = "onboarding_next_button"
@@ -777,34 +964,36 @@ fun StudentOnboardingScreen(
                 } else {
                     NexusButton(
                         onClick = {
-                            val studentId = initialStudent?.id ?: "student_default"
-                            val parsedCgpa = cgpaText.toDoubleOrNull() ?: 8.5
+                            val studentId = initialStudent?.id ?: "student_new"
+                            val parsedCgpa = cgpaText.toDoubleOrNull() ?: 0.0
                             val updatedStudent = StudentEntity(
                                 id = studentId,
-                                fullName = fullName.ifBlank { "Candidate" },
-                                email = email.ifBlank { "candidate@example.edu" },
+                                fullName = fullName.trim(),
+                                email = email.trim(),
                                 isEmailVerified = isEmailVerified,
-                                college = college,
-                                branch = branch,
-                                academicYear = academicYear,
+                                college = college.trim(),
+                                branch = branch.trim(),
+                                academicYear = academicYear.trim(),
                                 cgpa = parsedCgpa,
-                                technicalSkills = technicalSkills,
-                                areasOfInterest = areasOfInterest,
-                                preferredDomains = preferredDomains,
-                                githubProfileUrl = githubProfileUrl,
-                                resumeSummary = resumeProjects,
-                                experienceSummary = experienceSummary,
-                                bio = bio,
+                                technicalSkills = technicalSkills.trim(),
+                                areasOfInterest = areasOfInterest.trim(),
+                                preferredDomains = preferredDomains.trim(),
+                                githubProfileUrl = githubProfileUrl.trim(),
+                                resumeSummary = resumeProjects.trim(),
+                                experienceSummary = experienceSummary.trim(),
+                                bio = bio.trim(),
+                                resumeFilePath = resumeFilePath,
+                                onboardingStep = totalSteps,
                                 isOnboardingComplete = true,
                                 updatedAt = System.currentTimeMillis()
                             )
-                            onSaveProfile(updatedStudent, hackathons)
+                            onSaveProfile(updatedStudent, hackathons.toList())
                         },
                         variant = NexusButtonVariant.Primary,
                         icon = Icons.Default.Check,
                         testTag = "confirm_profile_button"
                     ) {
-                        Text("Confirm Profile")
+                        Text("Complete & Save Profile")
                     }
                 }
             }

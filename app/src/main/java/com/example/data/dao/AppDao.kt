@@ -15,11 +15,31 @@ import com.example.data.model.NotificationEntity
 import com.example.data.model.ProjectEntity
 import com.example.data.model.RecruiterEntity
 import com.example.data.model.SharedCandidateEntity
+import com.example.data.model.StudentAccountEntity
 import com.example.data.model.StudentEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppDao {
+
+    // --- Student Authentication Accounts ---
+    @Query("SELECT * FROM student_accounts WHERE email = :email LIMIT 1")
+    suspend fun getStudentAccountByEmail(email: String): StudentAccountEntity?
+
+    @Query("SELECT * FROM student_accounts WHERE id = :id LIMIT 1")
+    suspend fun getStudentAccountById(id: String): StudentAccountEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertStudentAccount(account: StudentAccountEntity)
+
+    @Update
+    suspend fun updateStudentAccount(account: StudentAccountEntity)
+
+    @Query("UPDATE student_accounts SET isEmailVerified = 1 WHERE email = :email")
+    suspend fun markStudentEmailVerified(email: String)
+
+    @Query("UPDATE student_accounts SET passwordHash = :newHash WHERE email = :email")
+    suspend fun updateStudentPassword(email: String, newHash: String)
 
     // --- Students ---
     @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
@@ -46,6 +66,9 @@ interface AppDao {
 
     @Query("SELECT * FROM hackathons WHERE studentId = :studentId")
     suspend fun getHackathonsForStudent(studentId: String): List<HackathonEntity>
+
+    @Query("DELETE FROM hackathons WHERE studentId = :studentId")
+    suspend fun deleteHackathonsForStudent(studentId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHackathon(hackathon: HackathonEntity)

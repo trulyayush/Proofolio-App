@@ -16,16 +16,20 @@ import com.example.data.model.SharedCandidateEntity
 import com.example.data.model.StudentEntity
 import com.example.data.repository.AppRepository
 import com.example.speech.SpeechRecognitionHelper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 sealed class ScreenDestination {
     object RoleSelect : ScreenDestination()
+    object StudentAuth : ScreenDestination()
     object StudentOnboarding : ScreenDestination()
     object StudentDashboard : ScreenDestination()
     data class ProjectDetail(val projectId: String) : ScreenDestination()
@@ -36,6 +40,7 @@ sealed class ScreenDestination {
     object RecruiterPortal : ScreenDestination()
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = AppRepository(application)
     private val speechHelper = SpeechRecognitionHelper(application)
@@ -49,22 +54,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _navigationStack = mutableListOf<ScreenDestination>()
 
+    // Active authenticated student ID (persisted across app restarts)
+    private val _activeStudentId = MutableStateFlow<String?>(repository.sessionManager.getActiveStudentId())
+    val activeStudentId: StateFlow<String?> = _activeStudentId.asStateFlow()
+
     val allStudents: StateFlow<List<StudentEntity>> = repository.dao.getAllStudentsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val currentStudent: StateFlow<StudentEntity?> = repository.dao.getStudentFlow("student_default")
+    // Dynamically react to active student ID
+    val currentStudent: StateFlow<StudentEntity?> = _activeStudentId
+        .flatMapLatest { id ->
+            if (id != null) repository.dao.getStudentFlow(id) else flowOf(null)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val studentProjects: StateFlow<List<ProjectEntity>> = repository.dao.getProjectsForStudentFlow("student_default")
+    val studentProjects: StateFlow<List<ProjectEntity>> = _activeStudentId
+        .flatMapLatest { id ->
+            if (id != null) repository.dao.getProjectsForStudentFlow(id) else flowOf(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allProjects: StateFlow<List<ProjectEntity>> = repository.dao.getAllProjectsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val studentHackathons: StateFlow<List<HackathonEntity>> = repository.dao.getHackathonsForStudentFlow("student_default")
+    val studentHackathons: StateFlow<List<HackathonEntity>> = _activeStudentId
+        .flatMapLatest { id ->
+            if (id != null) repository.dao.getHackathonsForStudentFlow(id) else flowOf(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val studentConnections: StateFlow<List<ConnectionEntity>> = repository.dao.getConnectionsForStudentFlow("student_default")
+    val studentConnections: StateFlow<List<ConnectionEntity>> = _activeStudentId
+        .flatMapLatest { id ->
+            if (id != null) repository.dao.getConnectionsForStudentFlow(id) else flowOf(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allReports: StateFlow<List<AssessmentReportEntity>> = repository.dao.getAllReportsFlow()
@@ -82,7 +104,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val campaignHistory: StateFlow<List<CampaignMessageEntity>> = repository.dao.getAllCampaignMessagesFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val studentNotifications: StateFlow<List<NotificationEntity>> = repository.dao.getNotificationsFlow("STUDENT", "student_default")
+    val studentNotifications: StateFlow<List<NotificationEntity>> = _activeStudentId
+        .flatMapLatest { id ->
+            if (id != null) repository.dao.getNotificationsFlow("STUDENT", id) else flowOf(emptyList())
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _activeInterviewQuestions = MutableStateFlow<List<InterviewQuestionEntity>>(emptyList())
@@ -91,6 +116,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             repository.initializeSeedDataIfNeeded()
+
+            // Check if student session is already active
+            val loggedInId = repository.sessionManager.getActiveStudentId()
+            if (loggedInId != null) {
+                _activeStudentId.value = loggedInId
+            }
         }
     }
 
@@ -111,11 +142,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun selectRole(role: String) {
         when (role) {
             "STUDENT" -> {
-                val student = currentStudent.value
-                if (student == null || !student.isOnboardingComplete) {
-                    navigateTo(ScreenDestination.StudentOnboarding)
+                val loggedInId = _activeStudentId.value
+                if (loggedInId == null) {
+                    // Route to Real Student Login/Register
+                    navigateTo(ScreenDestination.StudentAuth)
                 } else {
-                    navigateTo(ScreenDestination.StudentDashboard)
+                    viewModelScope.launch {
+                        val student = repository.dao.getStudentById(loggedInId)
+                        if (student == null || !student.isOnboardingComplete) {
+                            navigateTo(ScreenDestination.StudentOnboarding)
+                        } else {
+                            navigateTo(ScreenDestination.StudentDashboard)
+                        }
+                    }
                 }
             }
             "ADMIN" -> navigateTo(ScreenDestination.AdminCommandCenter)
@@ -124,6 +163,98 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- Student Authentication Operations ---
+
+    fun loginStudent(email: String, password: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.loginStudent(email, password)
+            result.onSuccess { account ->
+                _activeStudentId.value = account.id
+                val student = repository.dao.getStudentById(account.id)
+                if (student == null || !student.isOnboardingComplete) {
+                    _currentDestination.value = ScreenDestination.StudentOnboarding
+                } else {
+                    _currentDestination.value = ScreenDestination.StudentDashboard
+                }
+                onResult(Result.success(Unit))
+            }.onFailure { err ->
+                onResult(Result.failure(err))
+            }
+        }
+    }
+
+    fun registerStudent(fullName: String, email: String, password: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.registerStudent(fullName, email, password)
+            result.onSuccess { account ->
+                _activeStudentId.value = account.id
+                _currentDestination.value = ScreenDestination.StudentOnboarding
+                onResult(Result.success(Unit))
+            }.onFailure { err ->
+                onResult(Result.failure(err))
+            }
+        }
+    }
+
+    fun logoutStudent() {
+        repository.logoutStudent()
+        _activeStudentId.value = null
+        _navigationStack.clear()
+        _currentDestination.value = ScreenDestination.RoleSelect
+    }
+
+    fun verifyStudentEmail(email: String, code: String, onResult: (Result<Boolean>) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.verifyStudentEmail(email, code)
+            onResult(res)
+        }
+    }
+
+    fun resetStudentPassword(email: String, newPass: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.resetStudentPassword(email, newPass)
+            res.onSuccess { onResult(Result.success(Unit)) }
+                .onFailure { onResult(Result.failure(it)) }
+        }
+    }
+
+    fun uploadResumeFile(fileName: String, content: ByteArray, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            val studentId = _activeStudentId.value ?: "temp_student"
+            val res = repository.secureFileStorage.saveResumeFile(studentId, fileName, content)
+            onResult(res)
+        }
+    }
+
+    fun uploadCertificateFile(hackathonId: String, fileName: String, content: ByteArray, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            val studentId = _activeStudentId.value ?: "temp_student"
+            val res = repository.secureFileStorage.saveCertificateFile(studentId, hackathonId, fileName, content)
+            onResult(res)
+        }
+    }
+
+    fun saveOnboardingProgress(student: StudentEntity, hackathons: List<HackathonEntity>, step: Int) {
+        viewModelScope.launch {
+            repository.dao.insertStudent(student.copy(onboardingStep = step))
+            if (hackathons.isNotEmpty()) {
+                repository.dao.insertHackathons(hackathons)
+            }
+        }
+    }
+
+    fun saveStudentProfile(student: StudentEntity, hackathons: List<HackathonEntity>) {
+        viewModelScope.launch {
+            repository.dao.insertStudent(student.copy(isOnboardingComplete = true, onboardingStep = 7))
+            repository.dao.deleteHackathonsForStudent(student.id)
+            if (hackathons.isNotEmpty()) {
+                repository.dao.insertHackathons(hackathons)
+            }
+            _currentDestination.value = ScreenDestination.StudentDashboard
+        }
+    }
+
+    // Projects & Interviews
     fun openProjectDetail(projectId: String) {
         loadProjectInterviewQuestions(projectId)
         navigateTo(ScreenDestination.ProjectDetail(projectId))
@@ -154,18 +285,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         speechHelper.stopListening()
     }
 
-    // Student Actions
-    fun saveStudentProfile(student: StudentEntity, hackathons: List<HackathonEntity>) {
-        viewModelScope.launch {
-            repository.dao.insertStudent(student)
-            repository.dao.insertHackathons(hackathons)
-            navigateTo(ScreenDestination.StudentDashboard)
-        }
-    }
-
     fun submitNewProject(title: String, repoUrl: String, onResult: (Result<ProjectEntity>) -> Unit) {
         viewModelScope.launch {
-            val studentId = currentStudent.value?.id ?: "student_default"
+            val studentId = _activeStudentId.value ?: "student_default"
             val result = repository.submitNewProject(studentId, title, repoUrl)
             onResult(result)
             result.onSuccess { proj ->
@@ -177,7 +299,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveInterviewAnswer(questionId: String, answer: String, isVoice: Boolean) {
         viewModelScope.launch {
             repository.saveInterviewAnswer(questionId, answer, isVoice)
-            // Update local memory
             _activeInterviewQuestions.value = _activeInterviewQuestions.value.map {
                 if (it.id == questionId) it.copy(studentAnswer = answer, isVoiceTranscription = isVoice, isAnswered = answer.isNotBlank())
                 else it
@@ -187,10 +308,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun submitInterview(projectId: String) {
         viewModelScope.launch {
-            val studentId = currentStudent.value?.id ?: "student_default"
+            val studentId = _activeStudentId.value ?: "student_default"
             repository.completeInterviewAndEvaluate(projectId, studentId)
             loadProjectInterviewQuestions(projectId)
-            // Navigate to project detail which will now show: "Under Evaluation Review"
             _currentDestination.value = ScreenDestination.ProjectDetail(projectId)
         }
     }
@@ -281,7 +401,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendConnection(targetStudentId: String) {
         viewModelScope.launch {
-            val currentId = currentStudent.value?.id ?: "student_default"
+            val currentId = _activeStudentId.value ?: "student_default"
             repository.dao.insertConnection(
                 ConnectionEntity(
                     id = "conn_" + UUID.randomUUID().toString().take(8),

@@ -15,10 +15,12 @@ import com.example.data.model.NotificationEntity
 import com.example.data.model.ProjectEntity
 import com.example.data.model.RecruiterEntity
 import com.example.data.model.SharedCandidateEntity
+import com.example.data.model.StudentAccountEntity
 import com.example.data.model.StudentEntity
 
 @Database(
     entities = [
+        StudentAccountEntity::class,
         StudentEntity::class,
         HackathonEntity::class,
         ProjectEntity::class,
@@ -31,7 +33,7 @@ import com.example.data.model.StudentEntity
         CampaignMessageEntity::class,
         NotificationEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

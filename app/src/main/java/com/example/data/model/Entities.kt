@@ -25,6 +25,8 @@ data class StudentEntity(
     val resumeSummary: String, // editable extracted bullet points
     val experienceSummary: String,
     val bio: String = "",
+    val resumeFilePath: String = "", // Private internal file storage path
+    val onboardingStep: Int = 1, // Track incomplete onboarding step (1 to 7)
     val isOnboardingComplete: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -38,6 +40,7 @@ data class HackathonEntity(
     val rankOrPerformance: String, // e.g. "1st Place Winner", "Top 10 Finalist"
     val year: String,
     val certificateTitle: String,
+    val certificateFilePath: String = "", // Private internal file storage path
     val verified: Boolean = true
 )
 

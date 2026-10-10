@@ -20,6 +20,7 @@ import com.example.ui.screens.recruiter.RecruiterPortalScreen
 import com.example.ui.screens.student.AiInterviewScreen
 import com.example.ui.screens.student.AssessmentReportScreen
 import com.example.ui.screens.student.ProjectDetailScreen
+import com.example.ui.screens.student.StudentAuthScreen
 import com.example.ui.screens.student.StudentDashboardScreen
 import com.example.ui.screens.student.StudentOnboardingScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -73,11 +74,25 @@ fun NexusInternApp(viewModel: MainViewModel = viewModel()) {
             )
         }
 
+        is ScreenDestination.StudentAuth -> {
+            BackHandler { viewModel.navigateBack() }
+            StudentAuthScreen(
+                onLogin = { email, pass, onRes -> viewModel.loginStudent(email, pass, onRes) },
+                onSignUp = { name, email, pass, onRes -> viewModel.registerStudent(name, email, pass, onRes) },
+                onResetPassword = { email, newPass, onRes -> viewModel.resetStudentPassword(email, newPass, onRes) },
+                onBack = { viewModel.navigateBack() }
+            )
+        }
+
         is ScreenDestination.StudentOnboarding -> {
             BackHandler { viewModel.navigateBack() }
             StudentOnboardingScreen(
                 initialStudent = currentStudent,
                 onSaveProfile = { student, hacks -> viewModel.saveStudentProfile(student, hacks) },
+                onSaveProgress = { student, hacks, step -> viewModel.saveOnboardingProgress(student, hacks, step) },
+                onVerifyEmail = { email, code, onRes -> viewModel.verifyStudentEmail(email, code, onRes) },
+                onUploadResumeFile = { fileName, content, onRes -> viewModel.uploadResumeFile(fileName, content, onRes) },
+                onUploadCertificateFile = { hackId, fileName, content, onRes -> viewModel.uploadCertificateFile(hackId, fileName, content, onRes) },
                 onCancel = { viewModel.navigateBack() }
             )
         }
@@ -99,7 +114,8 @@ fun NexusInternApp(viewModel: MainViewModel = viewModel()) {
                     },
                     onAcceptConnection = { cId -> viewModel.acceptConnection(cId) },
                     onSendConnection = { sId -> viewModel.sendConnection(sId) },
-                    onSwitchRole = { viewModel.navigateTo(ScreenDestination.RoleSelect) }
+                    onSwitchRole = { viewModel.navigateTo(ScreenDestination.RoleSelect) },
+                    onLogout = { viewModel.logoutStudent() }
                 )
             }
         }

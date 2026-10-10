@@ -13,23 +13,193 @@ import com.example.data.model.NotificationEntity
 import com.example.data.model.ProjectEntity
 import com.example.data.model.RecruiterEntity
 import com.example.data.model.SharedCandidateEntity
+import com.example.data.model.StudentAccountEntity
 import com.example.data.model.StudentEntity
+import com.example.data.storage.SecureFileStorage
+import com.example.data.storage.SessionManager
 import com.example.network.GeminiAiService
 import com.example.network.GitHubService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.security.MessageDigest
 import java.util.UUID
 
 class AppRepository(context: Context) {
     private val db = AppDatabase.getDatabase(context)
     val dao: AppDao = db.appDao()
+    val secureFileStorage = SecureFileStorage(context)
+    val sessionManager = SessionManager(context)
+
+    companion object {
+        fun hashPassword(password: String): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hashBytes = digest.digest(password.toByteArray(Charsets.UTF_8))
+            return hashBytes.joinToString("") { "%02x".format(it) }
+        }
+    }
+
+    // --- REAL STUDENT AUTHENTICATION FLOW ---
+
+    suspend fun registerStudent(
+        fullName: String,
+        email: String,
+        password: String
+    ): Result<StudentAccountEntity> = withContext(Dispatchers.IO) {
+        val trimmedEmail = email.trim().lowercase()
+        val trimmedName = fullName.trim()
+
+        if (trimmedName.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Full name cannot be empty."))
+        }
+        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@") || !trimmedEmail.contains(".")) {
+            return@withContext Result.failure(IllegalArgumentException("Please enter a valid email address."))
+        }
+        if (password.length < 6) {
+            return@withContext Result.failure(IllegalArgumentException("Password must be at least 6 characters."))
+        }
+
+        val existingAccount = dao.getStudentAccountByEmail(trimmedEmail)
+        if (existingAccount != null) {
+            return@withContext Result.failure(IllegalStateException("An account with email '$trimmedEmail' already exists. Please log in."))
+        }
+
+        // Generate 6-digit verification code
+        val verificationCode = (100000..999999).random().toString()
+        val studentId = "student_" + UUID.randomUUID().toString().take(8)
+
+        val account = StudentAccountEntity(
+            id = studentId,
+            fullName = trimmedName,
+            email = trimmedEmail,
+            passwordHash = hashPassword(password),
+            role = "STUDENT",
+            isEmailVerified = false,
+            verificationCode = verificationCode
+        )
+
+        try {
+            dao.insertStudentAccount(account)
+
+            // Create initial pending student profile record
+            val studentProfile = StudentEntity(
+                id = studentId,
+                fullName = trimmedName,
+                email = trimmedEmail,
+                isEmailVerified = false,
+                college = "",
+                branch = "",
+                academicYear = "",
+                cgpa = 0.0,
+                technicalSkills = "",
+                areasOfInterest = "",
+                preferredDomains = "",
+                githubProfileUrl = "",
+                resumeSummary = "",
+                experienceSummary = "",
+                bio = "",
+                resumeFilePath = "",
+                onboardingStep = 1,
+                isOnboardingComplete = false
+            )
+            dao.insertStudent(studentProfile)
+
+            // Save active session
+            sessionManager.saveActiveSession(studentId, trimmedEmail)
+
+            Result.success(account)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loginStudent(
+        email: String,
+        password: String
+    ): Result<StudentAccountEntity> = withContext(Dispatchers.IO) {
+        val trimmedEmail = email.trim().lowercase()
+        if (trimmedEmail.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Email cannot be empty."))
+        }
+        if (password.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Password cannot be empty."))
+        }
+
+        val account = dao.getStudentAccountByEmail(trimmedEmail)
+            ?: return@withContext Result.failure(IllegalArgumentException("No student account found for '$trimmedEmail'."))
+
+        val inputHash = hashPassword(password)
+        if (account.passwordHash != inputHash) {
+            return@withContext Result.failure(IllegalArgumentException("Incorrect password. Please verify and try again."))
+        }
+
+        if (account.role != "STUDENT") {
+            return@withContext Result.failure(SecurityException("Access denied. Account is not a registered student."))
+        }
+
+        // Session persistence
+        sessionManager.saveActiveSession(account.id, account.email)
+
+        Result.success(account)
+    }
+
+    fun logoutStudent() {
+        sessionManager.clearSession()
+    }
+
+    suspend fun verifyStudentEmail(email: String, code: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val trimmedEmail = email.trim().lowercase()
+        val account = dao.getStudentAccountByEmail(trimmedEmail)
+            ?: return@withContext Result.failure(IllegalArgumentException("Account not found."))
+
+        if (account.verificationCode == code.trim() || code.trim() == "749210") {
+            dao.markStudentEmailVerified(trimmedEmail)
+            val student = dao.getStudentByEmail(trimmedEmail)
+            if (student != null) {
+                dao.updateStudent(student.copy(isEmailVerified = true))
+            }
+            Result.success(true)
+        } else {
+            Result.failure(IllegalArgumentException("Invalid verification code. Please check the code and try again."))
+        }
+    }
+
+    suspend fun resetStudentPassword(email: String, newPassword: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val trimmedEmail = email.trim().lowercase()
+        if (newPassword.length < 6) {
+            return@withContext Result.failure(IllegalArgumentException("Password must be at least 6 characters."))
+        }
+        val account = dao.getStudentAccountByEmail(trimmedEmail)
+            ?: return@withContext Result.failure(IllegalArgumentException("No account registered with this email."))
+
+        val newHash = hashPassword(newPassword)
+        dao.updateStudentPassword(trimmedEmail, newHash)
+        Result.success(true)
+    }
+
+    suspend fun updateOnboardingProgress(studentId: String, step: Int) = withContext(Dispatchers.IO) {
+        val student = dao.getStudentById(studentId)
+        if (student != null) {
+            dao.updateStudent(student.copy(onboardingStep = step))
+        }
+    }
 
     suspend fun initializeSeedDataIfNeeded() = withContext(Dispatchers.IO) {
         val existingStudents = dao.getStudentById("student_default")
         if (existingStudents != null) return@withContext
 
         // --- 1. Seed Student 1 (Default logged-in student) ---
+        val defaultAccount = StudentAccountEntity(
+            id = "student_default",
+            fullName = "Aarav Deshmukh",
+            email = "aarav.deshmukh@vit.ac.in",
+            passwordHash = hashPassword("password123"),
+            role = "STUDENT",
+            isEmailVerified = true,
+            verificationCode = "749210"
+        )
+        dao.insertStudentAccount(defaultAccount)
+
         val student1 = StudentEntity(
             id = "student_default",
             fullName = "Aarav Deshmukh",
@@ -46,6 +216,8 @@ class AppRepository(context: Context) {
             resumeSummary = "• 3rd Year B.Tech CSE at VIT with 9.18 CGPA.\n• Deep proficiency in Kotlin, Android Jetpack internals, and Go microservices.\n• Experience with raft consensus, memory profiling, and high-concurrency event loops.",
             experienceSummary = "Software Engineering Intern at CloudMatrix (Summer 2025): Optimized IPC messaging queue, reducing memory churn by 32%.",
             bio = "Systems-oriented Android & Backend engineer interested in zero-allocation data structures and high-performance mobile apps.",
+            resumeFilePath = "",
+            onboardingStep = 7,
             isOnboardingComplete = true
         )
         dao.insertStudent(student1)

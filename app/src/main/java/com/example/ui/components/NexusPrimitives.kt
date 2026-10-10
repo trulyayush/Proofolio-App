@@ -212,6 +212,7 @@ fun NexusTextField(
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null,
     onTrailingIconClick: (() -> Unit)? = null,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     testTag: String = "nexus_text_field"
@@ -287,6 +288,7 @@ fun NexusTextField(
                         singleLine = singleLine,
                         minLines = minLines,
                         maxLines = maxLines,
+                        visualTransformation = visualTransformation,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = if (enabled) NexusTokens.Foreground else NexusTokens.ForegroundSecondary
                         ),
