@@ -472,7 +472,7 @@ fun VivaScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Answer saved. We heard: “${state.lastTranscript}”",
+                            text = "Answer saved: “${state.lastTranscript}”",
                             style = MaterialTheme.typography.bodySmall,
                             color = NexusTokens.InfoText,
                             modifier = Modifier.weight(1f)

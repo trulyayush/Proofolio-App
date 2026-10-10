@@ -16,7 +16,7 @@ object ApiConfig {
     const val API_BASE = "https://verifiedbuild-api-215071922486.asia-south1.run.app/"
 
     // The recruiter web dashboard. Leave empty until SAM sends the link; empty hides the link in the app.
-    const val RECRUITER_WEB_URL = ""
+    const val RECRUITER_WEB_URL = "https://verifiedbuild-api-215071922486.asia-south1.run.app/recruiter/"
 }
 
 // The result of every API call. The UI shows `message` exactly as given: the API writes it in plain English.
