@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -185,7 +184,6 @@ fun StudentDashboardScreen(
     ) -> ApiResult<HackathonItem> = { _, _, _, _, _ -> ApiResult.Err("NOT_IMPL", "", null) },
     onDeleteHackathon: suspend (hackathonId: String) -> ApiResult<OkResponse> = { ApiResult.Err("NOT_IMPL", "", null) },
     onSignOut: () -> Unit,
-    onSettingsClick: () -> Unit = {},
     onExitDemo: () -> Unit = {},
     onResetDemo: () -> Unit = {}
 ) {
@@ -422,19 +420,6 @@ fun StudentDashboardScreen(
 
                 // Action controls
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier.testTag("dashboard_settings_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = NexusTokens.ForegroundSecondary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     IconButton(
                         onClick = onRefresh,
                         modifier = Modifier.testTag("dashboard_refresh_button")

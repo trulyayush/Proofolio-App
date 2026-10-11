@@ -203,51 +203,9 @@ private val NexusShapes = Shapes(
  */
 @Composable
 fun MyApplicationTheme(
-    isDarkMode: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorTokens = if (isDarkMode) {
-        NexusColorTokens(
-            background = Color(0xFF121212),
-            surface = Color(0xFF1E1E1E),
-            surfaceSecondary = Color(0xFF27272A),
-            foreground = Color(0xFFF4F4F5),
-            foregroundSecondary = Color(0xFFA1A1AA),
-            foregroundTertiary = Color(0xFF71717A),
-            border = Color(0xFF3F3F46),
-            borderStrong = Color(0xFF52525B),
-            accent = Color(0xFF818CF8),
-            accentHover = Color(0xFF6366F1),
-            accentSubtle = Color(0xFF1E1B4B),
-            onAccent = Color(0xFFFFFFFF)
-        )
-    } else {
-        NexusColorTokens()
-    }
-
-    val materialColorScheme = if (isDarkMode) {
-        androidx.compose.material3.darkColorScheme(
-            primary = Color(0xFF818CF8),
-            onPrimary = Color(0xFF1E1B4B),
-            primaryContainer = Color(0xFF312E81),
-            onPrimaryContainer = Color(0xFFE0E7FF),
-            secondary = Color(0xFFA1A1AA),
-            onSecondary = Color(0xFF18181B),
-            secondaryContainer = Color(0xFF27272A),
-            onSecondaryContainer = Color(0xFFF4F4F5),
-            background = Color(0xFF121212),
-            onBackground = Color(0xFFF4F4F5),
-            surface = Color(0xFF1E1E1E),
-            onSurface = Color(0xFFF4F4F5),
-            surfaceVariant = Color(0xFF27272A),
-            onSurfaceVariant = Color(0xFFA1A1AA),
-            outline = Color(0xFF3F3F46),
-            outlineVariant = Color(0xFF52525B)
-        )
-    } else {
-        NexusLightColorScheme
-    }
-
+    val colorTokens = NexusColorTokens()
     val spacingTokens = NexusSpacingTokens()
     val typographyTokens = NexusTypographyTokens()
     val elevationTokens = NexusElevationTokens()
@@ -261,7 +219,7 @@ fun MyApplicationTheme(
         LocalNexusCorners provides cornerTokens
     ) {
         MaterialTheme(
-            colorScheme = materialColorScheme,
+            colorScheme = NexusLightColorScheme,
             typography = Typography,
             shapes = NexusShapes,
             content = content

@@ -34,7 +34,6 @@ import com.example.ui.components.NexusCard
 import com.example.ui.screens.DemoWelcomeScreen
 import com.example.ui.screens.GetStartedScreen
 import com.example.ui.screens.PrivacyPolicyScreen
-import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TermsConditionsScreen
 import com.example.ui.screens.WelcomeScreen
 import com.example.ui.screens.student.AnalyzingScreen
@@ -178,17 +177,6 @@ fun VerifiedBuildApp(viewModel: AppViewModel = viewModel()) {
             )
         }
 
-        is Screen.Settings -> {
-            val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
-            SettingsScreen(
-                isDarkMode = isDarkMode,
-                onToggleDarkMode = { enabled -> viewModel.toggleDarkMode(enabled) },
-                onBack = { viewModel.back() },
-                onPrivacyPolicyClick = { viewModel.navigate(Screen.PrivacyPolicy) },
-                onTermsClick = { viewModel.navigate(Screen.TermsConditions) }
-            )
-        }
-
         is Screen.Dashboard -> {
             val reportState by viewModel.reportState.collectAsStateWithLifecycle()
             val applyingIds by viewModel.applyingListingIds.collectAsStateWithLifecycle()
@@ -233,7 +221,6 @@ fun VerifiedBuildApp(viewModel: AppViewModel = viewModel()) {
                     viewModel.deleteHackathon(hackathonId)
                 },
                 onSignOut = { viewModel.signOut() },
-                onSettingsClick = { viewModel.navigate(Screen.Settings) },
                 onExitDemo = { viewModel.setShowExitDemoDialog(true) },
                 onResetDemo = { viewModel.setShowResetDemoDialog(true) }
             )

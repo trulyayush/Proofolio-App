@@ -48,7 +48,6 @@ sealed class Screen {
     object PrivacyPolicy : Screen()
     object TermsConditions : Screen()
     object StudentRegistration : Screen()
-    object Settings : Screen()
 }
 
 sealed class Load<out T> {
@@ -67,13 +66,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _registrationError = MutableStateFlow<String?>(null)
     val registrationError: StateFlow<String?> = _registrationError.asStateFlow()
-
-    private val _isDarkMode = MutableStateFlow(false)
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
-
-    fun toggleDarkMode(enabled: Boolean) {
-        _isDarkMode.value = enabled
-    }
 
     fun registerStudent(name: String, email: String, pass: String) {
         viewModelScope.launch {
